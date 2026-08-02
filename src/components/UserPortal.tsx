@@ -113,9 +113,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
   useEffect(() => {
     loadGoals();
     loadFeedback();
-    if (currentUser.role !== 'EMPLOYEE') {
-      loadUsers();
-    }
+    loadUsers();
   }, [currentUser]);
 
   useEffect(() => {
@@ -437,19 +435,17 @@ export const UserPortal: React.FC<UserPortalProps> = ({
             1-on-1 Feedback & Reviews ({feedbackRequests.length})
           </button>
 
-          {currentUser.role !== 'EMPLOYEE' && (
-            <button
-              onClick={() => setActiveSubTab('user_management')}
-              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
-                activeSubTab === 'user_management'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Users className="h-4 w-4" />
-              User Access & Roles
-            </button>
-          )}
+          <button
+            onClick={() => setActiveSubTab('user_management')}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'user_management'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            User Access & Roles
+          </button>
         </div>
       </div>
 
@@ -854,7 +850,7 @@ export const UserPortal: React.FC<UserPortalProps> = ({
       )}
 
       {/* SUB-TAB 4: User Access Control & Management */}
-      {activeSubTab === 'user_management' && currentUser.role !== 'EMPLOYEE' && (
+      {activeSubTab === 'user_management' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-4 border-b border-slate-100 pb-4">
             <div>
@@ -867,14 +863,12 @@ export const UserPortal: React.FC<UserPortalProps> = ({
               </p>
             </div>
 
-            {currentUser.role !== 'ACCOUNTANT' && (
-              <button
-                onClick={() => setShowAddUserModal(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
-              >
-                <Plus className="h-4 w-4" /> Create User Account
-              </button>
-            )}
+            <button
+              onClick={() => setShowAddUserModal(true)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+            >
+              <Plus className="h-4 w-4" /> Create User Account
+            </button>
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200">

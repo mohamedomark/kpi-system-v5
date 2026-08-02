@@ -25,6 +25,9 @@ export const api = {
   saveUser: (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> =>
     Promise.resolve(localStore.saveUser(userData)),
 
+  addUser: (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> =>
+    Promise.resolve(localStore.saveUser(userData)),
+
   deleteUser: (id: string): Promise<void> => {
     localStore.deleteUser(id);
     return Promise.resolve();

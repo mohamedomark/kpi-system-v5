@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DepartmentCode, Employee, User, Department } from '../types';
+import { api } from '../services/api';
 import {
   UserPlus,
   Users,
@@ -41,6 +42,43 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpDept, setNewEmpDept] = useState<DepartmentCode>(selectedDept);
+
+  // System User Account Modal State
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newRole, setNewRole] = useState<User['role']>('EMPLOYEE');
+  const [newDept, setNewDept] = useState<DepartmentCode>(selectedDept);
+  const [newEmpId, setNewEmpId] = useState<string>('');
+  const [newPassword, setNewPassword] = useState('123');
+  const [userMsg, setUserMsg] = useState<string | null>(null);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim() || !newName.trim()) return;
+    try {
+      await api.addUser({
+        username: newUsername,
+        name: newName,
+        email: newEmail || `${newUsername}@company.com`,
+        role: newRole,
+        departmentId: newDept,
+        employeeId: newEmpId || undefined,
+        password: newPassword,
+      });
+      setUserMsg(`User account @${newUsername} created successfully!`);
+      setTimeout(() => setUserMsg(null), 4000);
+      setNewUsername('');
+      setNewName('');
+      setNewEmail('');
+      setNewRole('EMPLOYEE');
+      setNewEmpId('');
+      setShowAddUserModal(false);
+    } catch (err: any) {
+      alert(`Failed to create user account: ${err.message}`);
+    }
+  };
 
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
   const [editName, setEditName] = useState('');
@@ -140,19 +178,34 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
           </div>
         </div>
 
-        {!isReadOnly && (
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={() => {
               setNewEmpDept(selectedDept);
               setShowAddModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs shrink-0"
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
           >
             <UserPlus className="h-4 w-4" />
             Add New Employee
           </button>
-        )}
+
+          <button
+            onClick={() => setShowAddUserModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors shadow-xs cursor-pointer"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Add System User Account
+          </button>
+        </div>
       </div>
+
+      {userMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs">
+          <CheckCircle className="h-4 w-4 text-emerald-600" />
+          <span>{userMsg}</span>
+        </div>
+      )}
 
       {/* Filter and Search Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -361,7 +414,143 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
         </div>
       )}
 
-      {/* Edit Employee Modal */}
+      {/* MODAL: Add System User Account */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                Create System User Account
+              </h3>
+              <button
+                onClick={() => setShowAddUserModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sarah Connor"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Username</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. sarah.connor"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">User Role</label>
+                  <select
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="CTO">CTO (Chief Technology Officer)</option>
+                    <option value="PO">PO (Product Owner)</option>
+                    <option value="OM">OM (Operations Manager)</option>
+                    <option value="HR">HR (Human Resources)</option>
+                    <option value="ACCOUNTANT">ACCOUNTANT (Reviewer - Read Only)</option>
+                    <option value="ADMIN">ADMIN (System Administrator)</option>
+                    <option value="EVALUATOR">EVALUATOR</option>
+                    <option value="EMPLOYEE">EMPLOYEE</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Department</label>
+                  <select
+                    value={newDept}
+                    onChange={(e) => setNewDept(e.target.value as DepartmentCode)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                  >
+                    {deptList.map((d) => (
+                      <option key={d} value={d}>
+                        {d} Department
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. sarah@company.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Link to Employee Profile (Optional)</label>
+                <select
+                  value={newEmpId}
+                  onChange={(e) => setNewEmpId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">-- Unlinked / Standalone User --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.departmentId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Login Password</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Default password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-xs cursor-pointer"
+                >
+                  Create User Account
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {editingEmp && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 border border-slate-200">

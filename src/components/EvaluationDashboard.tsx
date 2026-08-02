@@ -133,7 +133,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     if (rawVal !== '') {
       const num = Number(rawVal);
       if (isNaN(num)) return;
-      cleanVal = Math.min(100, Math.max(0, num));
+      cleanVal = Math.max(0, num);
     }
 
     const currentDraft = localDrafts[kpiId] || { w1Pct: '', w2Pct: '', w3Pct: '', w4Pct: '', notes: '' };
@@ -700,8 +700,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           ref={(el) => (inputRefs.current[`${kpi.id}_w1Pct`] = el)}
                           type="number"
                           min="0"
-                          max="100"
-                          placeholder="0-100"
+                          placeholder="%"
                           disabled={isReadOnly}
                           value={draft.w1Pct !== null && draft.w1Pct !== undefined ? draft.w1Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w1Pct', e.target.value)}
@@ -725,8 +724,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           ref={(el) => (inputRefs.current[`${kpi.id}_w2Pct`] = el)}
                           type="number"
                           min="0"
-                          max="100"
-                          placeholder="0-100"
+                          placeholder="%"
                           disabled={isReadOnly}
                           value={draft.w2Pct !== null && draft.w2Pct !== undefined ? draft.w2Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w2Pct', e.target.value)}
@@ -750,8 +748,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           ref={(el) => (inputRefs.current[`${kpi.id}_w3Pct`] = el)}
                           type="number"
                           min="0"
-                          max="100"
-                          placeholder="0-100"
+                          placeholder="%"
                           disabled={isReadOnly}
                           value={draft.w3Pct !== null && draft.w3Pct !== undefined ? draft.w3Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w3Pct', e.target.value)}
@@ -775,8 +772,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           ref={(el) => (inputRefs.current[`${kpi.id}_w4Pct`] = el)}
                           type="number"
                           min="0"
-                          max="100"
-                          placeholder="0-100"
+                          placeholder="%"
                           disabled={isReadOnly}
                           value={draft.w4Pct !== null && draft.w4Pct !== undefined ? draft.w4Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w4Pct', e.target.value)}
