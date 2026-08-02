@@ -1,8 +1,62 @@
-export type DepartmentCode = 'DEV' | 'QA' | 'PO';
+export type DepartmentCode = 'DEV' | 'QA' | 'PO' | 'SALES';
 
 export interface Department {
   id: string; // e.g. 'DEV', 'QA', 'PO'
   name: string; // 'Development', 'Quality Assurance', 'Product Owners'
+}
+
+export type UserRole = 'ADMIN' | 'CTO' | 'PO' | 'OM' | 'HR' | 'ACCOUNTANT' | 'EVALUATOR' | 'EMPLOYEE';
+
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  departmentId?: DepartmentCode;
+  employeeId?: string; // Linked employee ID if role is EMPLOYEE
+  password?: string;
+  createdAt: string;
+}
+
+export interface Goal {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  departmentId: DepartmentCode;
+  category: string; // e.g., 'KPI Target', 'Skill Improvement', 'Project Milestone'
+  status: 'TODO' | 'IN_PROGRESS' | 'COMPLETED';
+  progressPct: number; // 0 - 100
+  targetDate: string;
+  createdAt: string;
+}
+
+export interface SelfAppraisal {
+  id: string;
+  employeeId: string;
+  kpiId: string;
+  month: number;
+  year: number;
+  selfW1Pct: number | null;
+  selfW2Pct: number | null;
+  selfW3Pct: number | null;
+  selfW4Pct: number | null;
+  selfNotes?: string;
+  updatedAt: string;
+}
+
+export interface FeedbackRequest {
+  id: string;
+  userId: string;
+  employeeId: string;
+  evaluatorRole: string; // e.g., 'HR', 'CTO', 'PO'
+  subject: string;
+  message: string;
+  reply?: string;
+  status: 'PENDING' | 'RESOLVED';
+  createdAt: string;
+  repliedAt?: string;
 }
 
 export interface Employee {

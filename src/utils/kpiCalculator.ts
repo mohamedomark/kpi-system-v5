@@ -1,13 +1,13 @@
 import { Evaluation, KPI, KpiCalculatedScore, EmployeeMonthlyPerformance, Employee } from '../types';
 
 /**
- * Safely parse a percentage value (0 to 100)
+ * Safely parse a percentage value (0 or above, supporting over-achievement)
  */
 export function sanitizePercentage(value: any): number | null {
   if (value === null || value === undefined || value === '') return null;
   const num = Number(value);
   if (isNaN(num)) return null;
-  return Math.min(100, Math.max(0, num));
+  return Math.max(0, num);
 }
 
 /**

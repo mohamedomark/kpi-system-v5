@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { DepartmentCode } from '../types';
+import { DepartmentCode, User, Department } from '../types';
 import {
   Calendar,
   Users,
@@ -10,15 +10,18 @@ import {
   Database,
   Download,
   Upload,
-  ShieldCheck,
   Server,
+  User as UserIcon,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'evaluation' | 'archive' | 'employees' | 'kpis';
-  setActiveTab: (tab: 'evaluation' | 'archive' | 'employees' | 'kpis') => void;
+  activeTab: 'evaluation' | 'archive' | 'employees' | 'kpis' | 'user_portal';
+  setActiveTab: (tab: 'evaluation' | 'archive' | 'employees' | 'kpis' | 'user_portal') => void;
   selectedDept: DepartmentCode;
   setSelectedDept: (dept: DepartmentCode) => void;
+  departments?: Department[];
   selectedMonth: number;
   setSelectedMonth: (m: number) => void;
   selectedYear: number;
@@ -27,6 +30,9 @@ interface HeaderProps {
   onExportDb: () => void;
   onImportDb: (json: any) => Promise<void>;
   isSaving?: boolean;
+  currentUser: User | null;
+  onLogout: () => void;
+  onShowLoginModal: () => void;
 }
 
 const MONTHS = [
@@ -39,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   selectedDept,
   setSelectedDept,
+  departments = [],
   selectedMonth,
   setSelectedMonth,
   selectedYear,
@@ -47,9 +54,16 @@ export const Header: React.FC<HeaderProps> = ({
   onExportDb,
   onImportDb,
   isSaving,
+  currentUser,
+  onLogout,
+  onShowLoginModal,
 }) => {
   const [showDbMenu, setShowDbMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const deptList: DepartmentCode[] = departments.length > 0 
+    ? (departments.map((d) => d.id) as DepartmentCode[])
+    : ['DEV', 'QA', 'PO', 'SALES'];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,7 +81,6 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
     reader.readAsText(file);
-    // Reset file input
     e.target.value = '';
   };
 
@@ -104,16 +117,16 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Department & Date Filter Controls */}
+          {/* Department, Date, DB & Auth User Badge */}
           <div className="flex flex-wrap items-center gap-2.5">
             
             {/* Department selector */}
             <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700/80 shadow-inner">
-              {(['DEV', 'QA', 'PO'] as DepartmentCode[]).map((dept) => (
+              {deptList.map((dept) => (
                 <button
                   key={dept}
                   onClick={() => setSelectedDept(dept)}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     selectedDept === dept
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
@@ -168,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="relative">
                 <button
                   onClick={() => setShowDbMenu(!showDbMenu)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700/80 transition-colors text-xs font-bold shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700/80 transition-colors text-xs font-bold shadow-xs cursor-pointer"
                 >
                   <Database className="h-3.5 w-3.5 text-emerald-400" />
                   <span>Database</span>
@@ -186,7 +199,7 @@ export const Header: React.FC<HeaderProps> = ({
                         onExportDb();
                         setShowDbMenu(false);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-700/80 text-slate-200 flex items-center gap-2 font-semibold transition-colors"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-700/80 text-slate-200 flex items-center gap-2 font-semibold transition-colors cursor-pointer"
                     >
                       <Download className="h-4 w-4 text-emerald-400 shrink-0" />
                       Export Database (JSON)
@@ -196,7 +209,7 @@ export const Header: React.FC<HeaderProps> = ({
                       onClick={() => {
                         fileInputRef.current?.click();
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-700/80 text-slate-200 flex items-center gap-2 font-semibold transition-colors"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-700/80 text-slate-200 flex items-center gap-2 font-semibold transition-colors cursor-pointer"
                     >
                       <Upload className="h-4 w-4 text-indigo-400 shrink-0" />
                       Upload / Restore Database
@@ -207,7 +220,7 @@ export const Header: React.FC<HeaderProps> = ({
                         setShowDbMenu(false);
                         onResetDb();
                       }}
-                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-900/30 text-rose-300 flex items-center gap-2 font-semibold transition-colors border-t border-slate-700/50 mt-1"
+                      className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-900/30 text-rose-300 flex items-center gap-2 font-semibold transition-colors border-t border-slate-700/50 mt-1 cursor-pointer"
                     >
                       <RotateCcw className="h-4 w-4 text-rose-400 shrink-0" />
                       Reset to Default Seeds
@@ -215,6 +228,40 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Logged-In User Profile Controls */}
+              {currentUser ? (
+                <div className="flex items-center gap-2 bg-slate-800/90 pl-2.5 pr-1.5 py-1 rounded-xl border border-slate-700/80 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-6 w-6 rounded-lg bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px] shrink-0">
+                      {currentUser.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-bold text-white max-w-[100px] sm:max-w-[140px] truncate">
+                      {currentUser.name}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase">
+                      {currentUser.role}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={onLogout}
+                    title="Sign Out"
+                    className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-700/80 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={onShowLoginModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-colors text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  <UserCheck className="h-3.5 w-3.5" />
+                  <span>Login</span>
+                </button>
+              )}
+
             </div>
           </div>
         </div>
@@ -223,7 +270,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex space-x-1 border-t border-slate-800/80 pt-2 pb-1.5 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('evaluation')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'evaluation'
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -235,7 +282,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => setActiveTab('archive')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'archive'
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -246,8 +293,20 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('user_portal')}
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'user_portal'
+                ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <UserIcon className="h-4 w-4 text-emerald-400" />
+            User Portal & Goals
+          </button>
+
+          <button
             onClick={() => setActiveTab('employees')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'employees'
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -259,7 +318,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => setActiveTab('kpis')}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'kpis'
                 ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'

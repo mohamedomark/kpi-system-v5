@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { DepartmentCode, Department, Employee, KPI, Evaluation } from './types';
+import { DepartmentCode, Department, Employee, KPI, Evaluation, User } from './types';
 import { api } from './services/api';
 import { Header } from './components/Header';
 import { EvaluationDashboard } from './components/EvaluationDashboard';
 import { HistoricalArchive } from './components/HistoricalArchive';
 import { EmployeeManagement } from './components/EmployeeManagement';
 import { KpiStructureView } from './components/KpiStructureView';
+import { UserPortal } from './components/UserPortal';
+import { LoginPage } from './components/LoginPage';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'evaluation' | 'archive' | 'employees' | 'kpis'>('evaluation');
+  const [activeTab, setActiveTab] = useState<'evaluation' | 'archive' | 'employees' | 'kpis' | 'user_portal'>('evaluation');
   const [selectedDept, setSelectedDept] = useState<DepartmentCode>('DEV');
   
   const currentDate = new Date();
@@ -20,6 +22,9 @@ export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kpis, setKpis] = useState<KPI[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -65,6 +70,8 @@ export default function App() {
     async function init() {
       setLoading(true);
       setError(null);
+      const activeUser = await api.getCurrentUser();
+      setCurrentUser(activeUser);
       await loadBaseData();
       await loadEmployees();
       await loadEvaluations();
@@ -72,6 +79,25 @@ export default function App() {
     }
     init();
   }, [loadBaseData, loadEmployees, loadEvaluations]);
+
+  // Handle Login
+  const handleLogin = async (username: string, password?: string) => {
+    const user = await api.login(username, password);
+    setCurrentUser(user);
+    setShowLoginModal(false);
+  };
+
+  const handleLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    setShowLoginModal(false);
+  };
+
+  // Handle Logout
+  const handleLogout = async () => {
+    await api.logout();
+    setCurrentUser(null);
+    setShowLoginModal(true);
+  };
 
   // Save single evaluation item
   const handleSaveEvaluation = async (
@@ -172,6 +198,8 @@ export default function App() {
       setLoading(true);
       try {
         await api.resetDatabase();
+        const activeUser = await api.getCurrentUser();
+        setCurrentUser(activeUser);
         await loadBaseData();
         await loadEmployees();
         await loadEvaluations();
@@ -204,6 +232,8 @@ export default function App() {
     setLoading(true);
     try {
       const result = await api.importDatabaseDump(jsonData);
+      const activeUser = await api.getCurrentUser();
+      setCurrentUser(activeUser);
       await loadBaseData();
       await loadEmployees();
       await loadEvaluations();
@@ -248,6 +278,16 @@ export default function App() {
     );
   }
 
+  // Show login screen if no user is logged in or modal triggered
+  if (!currentUser || showLoginModal) {
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+        onGuestContinue={currentUser ? () => setShowLoginModal(false) : undefined}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans">
       <Header
@@ -255,6 +295,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         selectedDept={selectedDept}
         setSelectedDept={setSelectedDept}
+        departments={departments}
         selectedMonth={selectedMonth}
         setSelectedMonth={setSelectedMonth}
         selectedYear={selectedYear}
@@ -263,9 +304,29 @@ export default function App() {
         onExportDb={handleExportDb}
         onImportDb={handleImportDb}
         isSaving={isSaving}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onShowLoginModal={() => setShowLoginModal(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {activeTab === 'user_portal' && (
+          <UserPortal
+            currentUser={currentUser}
+            employees={employees}
+            kpis={kpis}
+            evaluations={evaluations}
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            selectedDept={selectedDept}
+            onRefreshData={async () => {
+              await loadBaseData();
+              await loadEmployees();
+              await loadEvaluations();
+            }}
+          />
+        )}
+
         {activeTab === 'evaluation' && (
           <EvaluationDashboard
             departmentId={selectedDept}
@@ -276,6 +337,7 @@ export default function App() {
             evaluations={evaluations}
             onSaveEvaluation={handleSaveEvaluation}
             onSaveBatch={handleSaveBatch}
+            currentUser={currentUser}
           />
         )}
 
@@ -287,6 +349,7 @@ export default function App() {
             employees={employees}
             kpis={kpis}
             evaluations={evaluations}
+            departments={departments}
           />
         )}
 
@@ -294,10 +357,12 @@ export default function App() {
           <EmployeeManagement
             employees={employees}
             selectedDept={selectedDept}
+            departments={departments}
             onAddEmployee={handleAddEmployee}
             onUpdateEmployee={handleUpdateEmployee}
             onDeactivateEmployee={handleDeactivateEmployee}
             onReactivateEmployee={handleReactivateEmployee}
+            currentUser={currentUser}
           />
         )}
 
@@ -306,6 +371,7 @@ export default function App() {
             kpis={kpis}
             selectedDept={selectedDept}
             onSelectDept={setSelectedDept}
+            departments={departments}
           />
         )}
       </main>

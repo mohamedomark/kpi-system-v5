@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DepartmentCode, Employee } from '../types';
+import { DepartmentCode, Employee, User, Department } from '../types';
 import {
   UserPlus,
   Users,
@@ -13,25 +13,31 @@ import {
   Building,
   Shield,
   Briefcase,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface EmployeeManagementProps {
   employees: Employee[];
   selectedDept: DepartmentCode;
+  departments?: Department[];
   onAddEmployee: (name: string, departmentId: DepartmentCode) => void;
   onUpdateEmployee: (id: string, updates: { name?: string; departmentId?: DepartmentCode; isActive?: boolean }) => void;
   onDeactivateEmployee: (id: string) => void;
   onReactivateEmployee: (id: string) => void;
+  currentUser?: User | null;
 }
 
 export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
   employees,
   selectedDept,
+  departments = [],
   onAddEmployee,
   onUpdateEmployee,
   onDeactivateEmployee,
   onReactivateEmployee,
+  currentUser,
 }) => {
+  const isReadOnly = currentUser?.role === 'ACCOUNTANT';
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpDept, setNewEmpDept] = useState<DepartmentCode>(selectedDept);
@@ -46,12 +52,17 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
   const [deptFilter, setDeptFilter] = useState<'ALL' | DepartmentCode>('ALL');
   const [showDeactivated, setShowDeactivated] = useState(true);
 
+  const deptList: DepartmentCode[] = departments.length > 0
+    ? (departments.map((d) => d.id) as DepartmentCode[])
+    : ['DEV', 'QA', 'PO', 'SALES'];
+
   // Statistics
   const activeCount = employees.filter((e) => e.isActive).length;
   const deactivatedCount = employees.filter((e) => !e.isActive).length;
   const devCount = employees.filter((e) => e.departmentId === 'DEV' && e.isActive).length;
   const qaCount = employees.filter((e) => e.departmentId === 'QA' && e.isActive).length;
   const poCount = employees.filter((e) => e.departmentId === 'PO' && e.isActive).length;
+  const salesCount = employees.filter((e) => e.departmentId === 'SALES' && e.isActive).length;
 
   const filteredEmployees = employees.filter((emp) => {
     if (!showDeactivated && !emp.isActive) return false;
@@ -101,7 +112,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
             <Users className="h-6 w-6 text-emerald-600" /> Employee Directory
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Manage active team members across DEV, QA, and PO. Deactivating employees preserves all historical KPI evaluations.
+            Manage active team members across departments. Deactivating employees preserves all historical KPI evaluations.
           </p>
 
           {/* Quick Stats Ticker */}
@@ -118,6 +129,9 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
             <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
               PO: {poCount}
             </span>
+            <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              SALES: {salesCount}
+            </span>
             {deactivatedCount > 0 && (
               <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200">
                 Deactivated: {deactivatedCount}
@@ -126,16 +140,18 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            setNewEmpDept(selectedDept);
-            setShowAddModal(true);
-          }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs shrink-0"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add New Employee
-        </button>
+        {!isReadOnly && (
+          <button
+            onClick={() => {
+              setNewEmpDept(selectedDept);
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs shrink-0"
+          >
+            <UserPlus className="h-4 w-4" />
+            Add New Employee
+          </button>
+        )}
       </div>
 
       {/* Filter and Search Toolbar */}
@@ -154,11 +170,11 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
         </div>
 
         {/* Department Filter Tabs */}
-        <div className="flex items-center gap-2">
-          {(['ALL', 'DEV', 'QA', 'PO'] as const).map((dept) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {['ALL', ...deptList].map((dept) => (
             <button
               key={dept}
-              onClick={() => setDeptFilter(dept)}
+              onClick={() => setDeptFilter(dept as 'ALL' | DepartmentCode)}
               className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all border ${
                 deptFilter === dept
                   ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
@@ -204,7 +220,7 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                 </tr>
               ) : (
                 filteredEmployees.map((emp, index) => (
-                  <tr key={emp.id} className="hover:bg-slate-50/90 transition-colors">
+                  <tr key={`${emp.id}_${index}`} className="hover:bg-slate-50/90 transition-colors">
                     <td className="py-3.5 px-4 text-slate-400 font-mono text-center">{index + 1}</td>
 
                     <td className="py-3.5 px-4 font-extrabold text-slate-900 flex items-center gap-3">
@@ -317,9 +333,11 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                   onChange={(e) => setNewEmpDept(e.target.value as DepartmentCode)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-semibold text-slate-800"
                 >
-                  <option value="DEV">DEV (Development)</option>
-                  <option value="QA">QA (Quality Assurance)</option>
-                  <option value="PO">PO (Product Owners)</option>
+                  {deptList.map((d) => (
+                    <option key={d} value={d}>
+                      {d} Department
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -382,9 +400,11 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                   onChange={(e) => setEditDept(e.target.value as DepartmentCode)}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white font-semibold text-slate-800"
                 >
-                  <option value="DEV">DEV (Development)</option>
-                  <option value="QA">QA (Quality Assurance)</option>
-                  <option value="PO">PO (Product Owners)</option>
+                  {deptList.map((d) => (
+                    <option key={d} value={d}>
+                      {d} Department
+                    </option>
+                  ))}
                 </select>
               </div>
 

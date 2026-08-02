@@ -1,9 +1,10 @@
-import { Department, Employee, KPI, Evaluation, DepartmentCode } from '../types';
-import { INITIAL_DEPARTMENTS, INITIAL_EMPLOYEES, INITIAL_KPIS } from '../db/seedData';
+import { Department, Employee, KPI, Evaluation, DepartmentCode, User, Goal, SelfAppraisal, FeedbackRequest } from '../types';
+import { INITIAL_DEPARTMENTS, INITIAL_EMPLOYEES, INITIAL_KPIS, INITIAL_USERS, INITIAL_GOALS } from '../db/seedData';
 
 const STORAGE_KEY = 'employee_kpi_performance_db';
+const AUTH_KEY = 'employee_kpi_current_user';
 const SYSTEM_NAME = 'Employee KPI Performance and Management System';
-const SCHEMA_VERSION = '1.0.0';
+const SCHEMA_VERSION = '1.1.0';
 
 export interface DatabaseExportSchema {
   systemName: string;
@@ -13,6 +14,10 @@ export interface DatabaseExportSchema {
   employees: Employee[];
   kpis: KPI[];
   evaluations: Evaluation[];
+  users: User[];
+  goals: Goal[];
+  selfAppraisals: SelfAppraisal[];
+  feedbackRequests: FeedbackRequest[];
 }
 
 interface DatabaseSchema {
@@ -20,6 +25,24 @@ interface DatabaseSchema {
   employees: Employee[];
   kpis: KPI[];
   evaluations: Evaluation[];
+  users: User[];
+  goals: Goal[];
+  selfAppraisals: SelfAppraisal[];
+  feedbackRequests: FeedbackRequest[];
+}
+
+function deduplicateById<T extends { id: string }>(arr: T[]): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+  for (const item of arr) {
+    if (item && item.id) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        result.push(item);
+      }
+    }
+  }
+  return result;
 }
 
 class LocalStore {
@@ -28,6 +51,10 @@ class LocalStore {
     employees: [],
     kpis: [],
     evaluations: [],
+    users: [],
+    goals: [],
+    selfAppraisals: [],
+    feedbackRequests: [],
   };
 
   constructor() {
@@ -41,11 +68,59 @@ class LocalStore {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.departments) && Array.isArray(parsed.employees)) {
           this.db = {
-            departments: parsed.departments,
-            employees: parsed.employees,
-            kpis: parsed.kpis || [],
-            evaluations: parsed.evaluations || [],
+            departments: deduplicateById(parsed.departments),
+            employees: deduplicateById(parsed.employees),
+            kpis: deduplicateById(parsed.kpis || []),
+            evaluations: deduplicateById(parsed.evaluations || []),
+            users: deduplicateById(parsed.users || INITIAL_USERS),
+            goals: deduplicateById(parsed.goals || INITIAL_GOALS),
+            selfAppraisals: deduplicateById(parsed.selfAppraisals || []),
+            feedbackRequests: deduplicateById(parsed.feedbackRequests || []),
           };
+
+          // Ensure missing departments (e.g. SALES) exist in localStorage
+          INITIAL_DEPARTMENTS.forEach((d) => {
+            if (!this.db.departments.some((x) => x.id === d.id)) {
+              this.db.departments.push(d);
+            }
+          });
+
+          // Ensure missing default KPIs exist
+          INITIAL_KPIS.forEach((kpi, idx) => {
+            const id = `kpi_${kpi.departmentId.toLowerCase()}_${idx + 1}`;
+            if (!this.db.kpis.some((x) => x.id === id || (x.departmentId === kpi.departmentId && x.name === kpi.name))) {
+              this.db.kpis.push({ ...kpi, id });
+            }
+          });
+
+          // If Sales department has old multi-kpi structure, update Sales KPIs to the single 100% TL KPI
+          const salesKpisInDb = this.db.kpis.filter((k) => k.departmentId === 'SALES');
+          if (salesKpisInDb.length > 1 || salesKpisInDb.some((k) => k.weight !== 100)) {
+            this.db.kpis = this.db.kpis.filter((k) => k.departmentId !== 'SALES');
+            INITIAL_KPIS.filter((k) => k.departmentId === 'SALES').forEach((kpi, idx) => {
+              this.db.kpis.push({ ...kpi, id: `kpi_sales_${idx + 1}` });
+            });
+          }
+
+          // Ensure missing default employees exist
+          INITIAL_EMPLOYEES.forEach((emp, idx) => {
+            if (!this.db.employees.some((x) => x.name.toLowerCase() === emp.name.toLowerCase() && x.departmentId === emp.departmentId)) {
+              this.db.employees.push({
+                ...emp,
+                id: `emp_${emp.departmentId.toLowerCase()}_${idx + 1}`,
+                createdAt: new Date().toISOString(),
+              });
+            }
+          });
+
+          // Ensure missing default users exist
+          INITIAL_USERS.forEach((u) => {
+            if (!this.db.users.some((x) => x.id === u.id || x.username.toLowerCase() === u.username.toLowerCase())) {
+              this.db.users.push(u);
+            }
+          });
+
+          this.persist();
           console.log(`Database '${SYSTEM_NAME}' loaded from localStorage.`);
           return;
         }
@@ -70,6 +145,11 @@ class LocalStore {
       ...kpi,
       id: `kpi_${kpi.departmentId.toLowerCase()}_${idx + 1}`,
     }));
+
+    const users: User[] = INITIAL_USERS;
+    const goals: Goal[] = INITIAL_GOALS;
+    const selfAppraisals: SelfAppraisal[] = [];
+    const feedbackRequests: FeedbackRequest[] = [];
 
     // Pre-populate realistic sample evaluations for current and previous month
     const evaluations: Evaluation[] = [];
@@ -111,6 +191,10 @@ class LocalStore {
       employees,
       kpis,
       evaluations,
+      users,
+      goals,
+      selfAppraisals,
+      feedbackRequests,
     };
 
     this.persist();
@@ -136,6 +220,10 @@ class LocalStore {
       employees: this.db.employees,
       kpis: this.db.kpis,
       evaluations: this.db.evaluations,
+      users: this.db.users,
+      goals: this.db.goals,
+      selfAppraisals: this.db.selfAppraisals,
+      feedbackRequests: this.db.feedbackRequests,
     };
   }
 
@@ -148,12 +236,16 @@ class LocalStore {
     const employees = Array.isArray(importedData.employees) ? importedData.employees : [];
     const kpis = Array.isArray(importedData.kpis) ? importedData.kpis : [];
     const evaluations = Array.isArray(importedData.evaluations) ? importedData.evaluations : [];
+    const users = Array.isArray(importedData.users) ? importedData.users : INITIAL_USERS;
+    const goals = Array.isArray(importedData.goals) ? importedData.goals : INITIAL_GOALS;
+    const selfAppraisals = Array.isArray(importedData.selfAppraisals) ? importedData.selfAppraisals : [];
+    const feedbackRequests = Array.isArray(importedData.feedbackRequests) ? importedData.feedbackRequests : [];
 
     if (departments.length === 0 && employees.length === 0) {
       throw new Error('Import file does not contain valid departments or employees schema');
     }
 
-    this.db = { departments, employees, kpis, evaluations };
+    this.db = { departments, employees, kpis, evaluations, users, goals, selfAppraisals, feedbackRequests };
     this.persist();
 
     return {
@@ -164,8 +256,230 @@ class LocalStore {
         employees: employees.length,
         kpis: kpis.length,
         evaluations: evaluations.length,
+        users: users.length,
+        goals: goals.length,
       },
     };
+  }
+
+  // --- Auth & User Management APIs ---
+
+  public getCurrentSessionUser(): User | null {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
+      if (raw) {
+        const u = JSON.parse(raw);
+        // Verify user exists in current DB
+        const match = this.db.users.find((x) => x.id === u.id);
+        if (match) return match;
+      }
+    } catch (e) {
+      console.error('Error reading auth session user:', e);
+    }
+    return null;
+  }
+
+  public loginUser(username: string, password?: string): User {
+    const trimmed = username.trim().toLowerCase();
+    const user = this.db.users.find((u) => u.username.toLowerCase() === trimmed);
+    if (!user) {
+      throw new Error(`User username "${username}" not found.`);
+    }
+    if (password && user.password && user.password !== password) {
+      throw new Error('Invalid password. Please try again.');
+    }
+    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    return user;
+  }
+
+  public logoutUser(): void {
+    localStorage.removeItem(AUTH_KEY);
+  }
+
+  public getUsers(): User[] {
+    return this.db.users;
+  }
+
+  public saveUser(userData: Partial<User> & { username: string; name: string; role: User['role'] }): User {
+    let existing = userData.id ? this.db.users.find((u) => u.id === userData.id) : null;
+    if (existing) {
+      if (userData.name) existing.name = userData.name.trim();
+      if (userData.username) existing.username = userData.username.trim();
+      if (userData.email) existing.email = userData.email.trim();
+      if (userData.role) existing.role = userData.role;
+      if (userData.departmentId !== undefined) existing.departmentId = userData.departmentId;
+      if (userData.employeeId !== undefined) existing.employeeId = userData.employeeId;
+      if (userData.password) existing.password = userData.password;
+      this.persist();
+      return existing;
+    } else {
+      const newUser: User = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        username: userData.username.trim(),
+        name: userData.name.trim(),
+        email: userData.email || `${userData.username.trim()}@company.com`,
+        role: userData.role,
+        departmentId: userData.departmentId,
+        employeeId: userData.employeeId,
+        password: userData.password || '123',
+        createdAt: new Date().toISOString(),
+      };
+      this.db.users.push(newUser);
+      this.db.users = deduplicateById(this.db.users);
+      this.persist();
+      return newUser;
+    }
+  }
+
+  public deleteUser(idOrUsername: string): void {
+    this.db.users = this.db.users.filter(
+      (u) => u.id !== idOrUsername && u.username.toLowerCase() !== idOrUsername.toLowerCase()
+    );
+    this.persist();
+  }
+
+  // --- Goals APIs ---
+
+  public getGoals(userId?: string, departmentId?: DepartmentCode): Goal[] {
+    return this.db.goals.filter((g) => {
+      if (userId && g.userId !== userId) return false;
+      if (departmentId && g.departmentId !== departmentId) return false;
+      return true;
+    });
+  }
+
+  public saveGoal(goalData: Partial<Goal> & { userId: string; title: string; departmentId: DepartmentCode }): Goal {
+    let existing = goalData.id ? this.db.goals.find((g) => g.id === goalData.id) : null;
+    if (existing) {
+      if (goalData.title) existing.title = goalData.title.trim();
+      if (goalData.description !== undefined) existing.description = goalData.description;
+      if (goalData.category) existing.category = goalData.category;
+      if (goalData.status) existing.status = goalData.status;
+      if (goalData.progressPct !== undefined) existing.progressPct = goalData.progressPct;
+      if (goalData.targetDate) existing.targetDate = goalData.targetDate;
+      this.persist();
+      return existing;
+    } else {
+      const newGoal: Goal = {
+        id: `goal_${Date.now()}`,
+        userId: goalData.userId,
+        title: goalData.title.trim(),
+        description: goalData.description || '',
+        departmentId: goalData.departmentId,
+        category: goalData.category || 'General Goal',
+        status: goalData.status || 'IN_PROGRESS',
+        progressPct: goalData.progressPct ?? 0,
+        targetDate: goalData.targetDate || new Date().toISOString().split('T')[0],
+        createdAt: new Date().toISOString(),
+      };
+      this.db.goals.push(newGoal);
+      this.persist();
+      return newGoal;
+    }
+  }
+
+  public deleteGoal(id: string): void {
+    this.db.goals = this.db.goals.filter((g) => g.id !== id);
+    this.persist();
+  }
+
+  // --- Self Appraisals APIs ---
+
+  public getSelfAppraisals(employeeId: string, month: number, year: number): SelfAppraisal[] {
+    return this.db.selfAppraisals.filter(
+      (sa) => sa.employeeId === employeeId && sa.month === month && sa.year === year
+    );
+  }
+
+  public saveSelfAppraisal(data: {
+    employeeId: string;
+    kpiId: string;
+    month: number;
+    year: number;
+    selfW1Pct?: number | null;
+    selfW2Pct?: number | null;
+    selfW3Pct?: number | null;
+    selfW4Pct?: number | null;
+    selfNotes?: string;
+  }): SelfAppraisal {
+    let existing = this.db.selfAppraisals.find(
+      (sa) =>
+        sa.employeeId === data.employeeId &&
+        sa.kpiId === data.kpiId &&
+        sa.month === data.month &&
+        sa.year === data.year
+    );
+
+    if (existing) {
+      if (data.selfW1Pct !== undefined) existing.selfW1Pct = data.selfW1Pct;
+      if (data.selfW2Pct !== undefined) existing.selfW2Pct = data.selfW2Pct;
+      if (data.selfW3Pct !== undefined) existing.selfW3Pct = data.selfW3Pct;
+      if (data.selfW4Pct !== undefined) existing.selfW4Pct = data.selfW4Pct;
+      if (data.selfNotes !== undefined) existing.selfNotes = data.selfNotes;
+      existing.updatedAt = new Date().toISOString();
+      this.persist();
+      return existing;
+    } else {
+      const newSA: SelfAppraisal = {
+        id: `sa_${data.employeeId}_${data.kpiId}_${data.year}_${data.month}`,
+        employeeId: data.employeeId,
+        kpiId: data.kpiId,
+        month: data.month,
+        year: data.year,
+        selfW1Pct: data.selfW1Pct ?? null,
+        selfW2Pct: data.selfW2Pct ?? null,
+        selfW3Pct: data.selfW3Pct ?? null,
+        selfW4Pct: data.selfW4Pct ?? null,
+        selfNotes: data.selfNotes || '',
+        updatedAt: new Date().toISOString(),
+      };
+      this.db.selfAppraisals.push(newSA);
+      this.persist();
+      return newSA;
+    }
+  }
+
+  // --- Feedback Requests APIs ---
+
+  public getFeedbackRequests(userId?: string): FeedbackRequest[] {
+    if (userId) {
+      return this.db.feedbackRequests.filter((f) => f.userId === userId);
+    }
+    return this.db.feedbackRequests;
+  }
+
+  public sendFeedbackRequest(data: {
+    userId: string;
+    employeeId: string;
+    evaluatorRole: string;
+    subject: string;
+    message: string;
+  }): FeedbackRequest {
+    const newReq: FeedbackRequest = {
+      id: `fb_${Date.now()}`,
+      userId: data.userId,
+      employeeId: data.employeeId,
+      evaluatorRole: data.evaluatorRole,
+      subject: data.subject.trim(),
+      message: data.message.trim(),
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+    this.db.feedbackRequests.push(newReq);
+    this.persist();
+    return newReq;
+  }
+
+  public replyFeedbackRequest(id: string, replyMessage: string): FeedbackRequest | undefined {
+    const req = this.db.feedbackRequests.find((f) => f.id === id);
+    if (req) {
+      req.reply = replyMessage.trim();
+      req.status = 'RESOLVED';
+      req.repliedAt = new Date().toISOString();
+      this.persist();
+      return req;
+    }
+    return undefined;
   }
 
   // --- Department APIs ---

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DepartmentCode, Employee, KPI, Evaluation } from '../types';
+import { DepartmentCode, Employee, KPI, Evaluation, User as UserType } from '../types';
 import { calculateKpiScore, sanitizePercentage, getGradeBadgeConfig } from '../utils/kpiCalculator';
 import {
   User,
@@ -16,6 +16,8 @@ import {
   Copy,
   BarChart2,
   Tag,
+  ShieldCheck,
+  Calculator,
 } from 'lucide-react';
 
 interface EvaluationDashboardProps {
@@ -27,6 +29,7 @@ interface EvaluationDashboardProps {
   evaluations: Evaluation[];
   onSaveEvaluation: (data: Partial<Evaluation> & { employeeId: string; kpiId: string; month: number; year: number }) => void;
   onSaveBatch: (data: Array<Partial<Evaluation> & { employeeId: string; kpiId: string; month: number; year: number }>) => void;
+  currentUser?: UserType | null;
 }
 
 const PRESET_NOTE_TAGS = [
@@ -47,12 +50,20 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
   evaluations,
   onSaveEvaluation,
   onSaveBatch,
+  currentUser,
 }) => {
+  const isReadOnly = currentUser?.role === 'ACCOUNTANT';
+
   // Active selected employee
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   
   // Evaluator Role Filter (All, HR, PO, CTO, OM, etc.)
   const [evaluatorFilter, setEvaluatorFilter] = useState<string>('ALL');
+
+  // Sales Meetings Calculator State
+  const [showSalesCalcModal, setShowSalesCalcModal] = useState<boolean>(false);
+  const [calcOfflineMeetings, setCalcOfflineMeetings] = useState<number | ''>(6);
+  const [calcOnlineMeetings, setCalcOnlineMeetings] = useState<number | ''>(9);
 
   // Active notes popover/modal
   const [activeNotesKpiId, setActiveNotesKpiId] = useState<string | null>(null);
@@ -280,6 +291,57 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     onSaveBatch(batch);
   };
 
+  // Handle Sales Meetings Calculation
+  const handleApplySalesMeetingsCalc = () => {
+    if (!selectedEmployeeId) return;
+
+    // Find the Sales Meetings KPI
+    const meetingsKpi = kpis.find(
+      (k) =>
+        k.name.toLowerCase().includes('meeting') ||
+        k.departmentId === 'SALES'
+    ) || kpis[0];
+
+    if (!meetingsKpi) return;
+
+    const offVal = Number(calcOfflineMeetings) || 0;
+    const onVal = Number(calcOnlineMeetings) || 0;
+    const convertedOnline = Math.floor(onVal / 3);
+    const totalEffective = offVal + convertedOnline;
+    const calculatedPercentage = Math.round((totalEffective / 15) * 100);
+    const isOverAchievement = calculatedPercentage > 100;
+    const overPct = calculatedPercentage - 100;
+
+    const calcNote = `Meetings Log: ${offVal} offline + ${onVal} online (${convertedOnline} off equiv) = ${totalEffective}/15 required meetings (${calculatedPercentage}%${isOverAchievement ? ` - Over-Achieved by +${overPct}%` : ''})`;
+
+    const draft = {
+      w1Pct: calculatedPercentage,
+      w2Pct: calculatedPercentage,
+      w3Pct: calculatedPercentage,
+      w4Pct: calculatedPercentage,
+      notes: calcNote,
+    };
+
+    setLocalDrafts((prev) => ({
+      ...prev,
+      [meetingsKpi.id]: draft,
+    }));
+
+    onSaveEvaluation({
+      employeeId: selectedEmployeeId,
+      kpiId: meetingsKpi.id,
+      month,
+      year,
+      w1Pct: calculatedPercentage,
+      w2Pct: calculatedPercentage,
+      w3Pct: calculatedPercentage,
+      w4Pct: calculatedPercentage,
+      notes: calcNote,
+    });
+
+    setShowSalesCalcModal(false);
+  };
+
   // Calculate live scores for current employee
   const calculatedRows = kpis.map((kpi) => {
     const draft = localDrafts[kpi.id] || { w1Pct: '', w2Pct: '', w3Pct: '', w4Pct: '', notes: '' };
@@ -335,6 +397,20 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
   return (
     <div className="space-y-6">
       
+      {isReadOnly && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-900 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0" />
+            <span>
+              <strong>Accountant Reviewer Mode:</strong> You are logged in with Reviewer permissions. All KPI evaluations and scores are displayed in read-only mode for audit and verification.
+            </span>
+          </div>
+          <span className="px-2.5 py-1 bg-amber-200 text-amber-950 rounded-lg text-[10px] font-black uppercase tracking-wider shrink-0">
+            Read Only
+          </span>
+        </div>
+      )}
+
       {/* Employee Selector Bar & Evaluator Filter */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
         
@@ -462,6 +538,15 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
               >
                 Reset
               </button>
+
+              <button
+                onClick={() => setShowSalesCalcModal(true)}
+                className="px-2.5 py-1 text-xs font-extrabold bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer ml-1"
+                title="Calculate Sales Meetings KPI (15 Offline Req, 3 Online = 1 Offline)"
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                <span>Meetings Calc</span>
+              </button>
             </div>
           </div>
         </div>
@@ -575,7 +660,25 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
 
                     {/* KPI Title */}
                     <td className="py-3.5 px-4 font-bold text-slate-900">
-                      {kpi.name}
+                      <div className="flex flex-col">
+                        <span className="flex items-center gap-1.5">
+                          {kpi.name}
+                          {(kpi.name.toLowerCase().includes('meeting') || kpi.departmentId === 'SALES') && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-teal-100 text-teal-800 border border-teal-200">
+                              15 Meetings Base
+                            </span>
+                          )}
+                        </span>
+                        {(kpi.name.toLowerCase().includes('meeting') || kpi.departmentId === 'SALES') && (
+                          <button
+                            onClick={() => setShowSalesCalcModal(true)}
+                            className="mt-1 text-left text-[11px] font-bold text-teal-700 hover:text-teal-900 flex items-center gap-1 hover:underline cursor-pointer"
+                          >
+                            <Calculator className="h-3 w-3" />
+                            <span>Calculate from Offline (X) & Online (Y) meetings</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
 
                     {/* Evaluator Role */}
@@ -599,10 +702,15 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           min="0"
                           max="100"
                           placeholder="0-100"
+                          disabled={isReadOnly}
                           value={draft.w1Pct !== null && draft.w1Pct !== undefined ? draft.w1Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w1Pct', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, kpiIndex, 0)}
-                          className="w-16 text-center font-black bg-white border border-slate-300/90 rounded-lg px-1.5 py-1 text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none shadow-2xs"
+                          className={`w-16 text-center font-black rounded-lg px-1.5 py-1 text-slate-900 shadow-2xs ${
+                            isReadOnly
+                              ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500'
+                              : 'bg-white border-slate-300/90 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none'
+                          }`}
                         />
                         <span className="text-[10px] text-slate-500 mt-1 font-mono">
                           ={score.w1Score.toFixed(2)} pts
@@ -619,10 +727,15 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           min="0"
                           max="100"
                           placeholder="0-100"
+                          disabled={isReadOnly}
                           value={draft.w2Pct !== null && draft.w2Pct !== undefined ? draft.w2Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w2Pct', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, kpiIndex, 1)}
-                          className="w-16 text-center font-black bg-white border border-slate-300/90 rounded-lg px-1.5 py-1 text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none shadow-2xs"
+                          className={`w-16 text-center font-black rounded-lg px-1.5 py-1 text-slate-900 shadow-2xs ${
+                            isReadOnly
+                              ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500'
+                              : 'bg-white border-slate-300/90 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none'
+                          }`}
                         />
                         <span className="text-[10px] text-slate-500 mt-1 font-mono">
                           ={score.w2Score.toFixed(2)} pts
@@ -639,10 +752,15 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           min="0"
                           max="100"
                           placeholder="0-100"
+                          disabled={isReadOnly}
                           value={draft.w3Pct !== null && draft.w3Pct !== undefined ? draft.w3Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w3Pct', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, kpiIndex, 2)}
-                          className="w-16 text-center font-black bg-white border border-slate-300/90 rounded-lg px-1.5 py-1 text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none shadow-2xs"
+                          className={`w-16 text-center font-black rounded-lg px-1.5 py-1 text-slate-900 shadow-2xs ${
+                            isReadOnly
+                              ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500'
+                              : 'bg-white border-slate-300/90 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none'
+                          }`}
                         />
                         <span className="text-[10px] text-slate-500 mt-1 font-mono">
                           ={score.w3Score.toFixed(2)} pts
@@ -659,10 +777,15 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                           min="0"
                           max="100"
                           placeholder="0-100"
+                          disabled={isReadOnly}
                           value={draft.w4Pct !== null && draft.w4Pct !== undefined ? draft.w4Pct : ''}
                           onChange={(e) => handlePctChange(kpi.id, 'w4Pct', e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, kpiIndex, 3)}
-                          className="w-16 text-center font-black bg-white border border-slate-300/90 rounded-lg px-1.5 py-1 text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none shadow-2xs"
+                          className={`w-16 text-center font-black rounded-lg px-1.5 py-1 text-slate-900 shadow-2xs ${
+                            isReadOnly
+                              ? 'bg-slate-100 border-slate-200 cursor-not-allowed text-slate-500'
+                              : 'bg-white border-slate-300/90 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none'
+                          }`}
                         />
                         <span className="text-[10px] text-slate-500 mt-1 font-mono">
                           ={score.w4Score.toFixed(2)} pts
@@ -776,6 +899,135 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Sales Meetings Calculator Modal */}
+      {showSalesCalcModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-teal-100 text-teal-800 rounded-xl">
+                  <Calculator className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Sales Meetings KPI Calculator</h3>
+                  <p className="text-[11px] text-slate-500">Calculate completion score based on offline & online meetings</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSalesCalcModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Formula Rules Banner */}
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs space-y-1">
+              <div className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                <HelpCircle className="h-3.5 w-3.5 text-teal-600" /> Department KPI Rule:
+              </div>
+              <ul className="text-[11px] text-slate-600 list-disc list-inside space-y-0.5">
+                <li>Monthly requirement: <strong>15 Offline Meetings</strong> (100%)</li>
+                <li>Conversion: <strong>3 Online Meetings = 1 Offline Meeting</strong></li>
+              </ul>
+            </div>
+
+            {/* Form Inputs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  Offline Meetings
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={calcOfflineMeetings}
+                  onChange={(e) => setCalcOfflineMeetings(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 6"
+                  className="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-extrabold text-slate-700 mb-1">
+                  Online Meetings
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={calcOnlineMeetings}
+                  onChange={(e) => setCalcOnlineMeetings(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="e.g. 9"
+                  className="w-full px-3 py-2 text-sm font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Live Calculation Output Card */}
+            {(() => {
+              const offVal = Number(calcOfflineMeetings) || 0;
+              const onVal = Number(calcOnlineMeetings) || 0;
+              const convertedOnline = Math.floor(onVal / 3);
+              const totalEffective = offVal + convertedOnline;
+              const calcPct = Math.round((totalEffective / 15) * 100);
+              const isOver = calcPct > 100;
+              const overDiff = calcPct - 100;
+
+              return (
+                <div className="bg-gradient-to-br from-teal-900 to-slate-900 text-white p-4 rounded-xl space-y-3 shadow-inner">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-teal-300 uppercase tracking-wider">
+                    <span>Calculation Breakdown</span>
+                    {isOver && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 uppercase tracking-wide">
+                        Over-Achievement (+{overDiff}%)
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                      <div className="text-slate-400 text-[10px]">Online Converted</div>
+                      <div className="font-mono font-bold text-teal-300">{onVal} ÷ 3 = {convertedOnline} offline</div>
+                    </div>
+                    <div className="bg-slate-800/80 p-2.5 rounded-lg border border-slate-700">
+                      <div className="text-slate-400 text-[10px]">Effective Total</div>
+                      <div className="font-mono font-bold text-amber-300">{offVal} + {convertedOnline} = {totalEffective} / 15</div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-700 flex items-center justify-between">
+                    <span className="text-xs text-slate-300 font-semibold">Calculated KPI Percentage:</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-2xl font-black ${isOver ? 'text-amber-300' : 'text-emerald-400'}`}>
+                        {calcPct}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSalesCalcModal(false)}
+                className="px-3.5 py-2 text-xs font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplySalesMeetingsCalc}
+                className="px-4 py-2 text-xs font-bold text-white bg-teal-600 rounded-xl hover:bg-teal-700 shadow-md cursor-pointer flex items-center gap-1.5"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Apply Score to Evaluation Sheet</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

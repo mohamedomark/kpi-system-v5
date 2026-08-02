@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DepartmentCode, Employee, KPI, Evaluation } from '../types';
+import { DepartmentCode, Employee, KPI, Evaluation, Department } from '../types';
 import { calculateEmployeePerformance, getGradeBadgeConfig } from '../utils/kpiCalculator';
 import {
   Search,
@@ -23,6 +23,7 @@ interface HistoricalArchiveProps {
   employees: Employee[]; // Includes all employees (active + deactivated)
   kpis: KPI[];
   evaluations: Evaluation[];
+  departments?: Department[];
 }
 
 export const HistoricalArchive: React.FC<HistoricalArchiveProps> = ({
@@ -32,10 +33,15 @@ export const HistoricalArchive: React.FC<HistoricalArchiveProps> = ({
   employees,
   kpis,
   evaluations,
+  departments = [],
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null);
   const [activeDeptTab, setActiveDeptTab] = useState<DepartmentCode>(departmentId);
+
+  const deptList: DepartmentCode[] = departments.length > 0
+    ? (departments.map((d) => d.id) as DepartmentCode[])
+    : ['DEV', 'QA', 'PO', 'SALES'];
 
   // Compute performance record for employees in selected activeDeptTab
   const deptEmployees = employees.filter((e) => e.departmentId === activeDeptTab);
@@ -113,7 +119,7 @@ export const HistoricalArchive: React.FC<HistoricalArchiveProps> = ({
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold uppercase text-slate-400 mr-2">Department Report:</span>
-          {(['DEV', 'QA', 'PO'] as DepartmentCode[]).map((dept) => (
+          {deptList.map((dept) => (
             <button
               key={dept}
               onClick={() => setActiveDeptTab(dept)}

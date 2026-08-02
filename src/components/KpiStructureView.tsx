@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { DepartmentCode, KPI } from '../types';
-import { Target, CheckCircle2, ShieldCheck, Filter, Award, PieChart } from 'lucide-react';
+import { DepartmentCode, KPI, Department } from '../types';
+import { Target, CheckCircle2, ShieldCheck, Filter, Award, PieChart, Calculator, Info } from 'lucide-react';
 
 interface KpiStructureViewProps {
   kpis: KPI[];
   selectedDept: DepartmentCode;
   onSelectDept: (dept: DepartmentCode) => void;
+  departments?: Department[];
 }
 
 export const KpiStructureView: React.FC<KpiStructureViewProps> = ({
   kpis,
   selectedDept,
   onSelectDept,
+  departments = [],
 }) => {
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+
+  const deptList: DepartmentCode[] = departments.length > 0 
+    ? (departments.map((d) => d.id) as DepartmentCode[])
+    : ['DEV', 'QA', 'PO', 'SALES'];
 
   const deptKpis = kpis.filter((k) => k.departmentId === selectedDept);
   const totalWeight = deptKpis.reduce((sum, k) => sum + k.weight, 0);
@@ -90,7 +96,7 @@ export const KpiStructureView: React.FC<KpiStructureViewProps> = ({
         
         {/* Dept switch buttons */}
         <div className="flex items-center gap-2">
-          {(['DEV', 'QA', 'PO'] as DepartmentCode[]).map((dept) => {
+          {deptList.map((dept) => {
             const sum = kpis
               .filter((k) => k.departmentId === dept)
               .reduce((acc, k) => acc + k.weight, 0);
@@ -189,6 +195,39 @@ export const KpiStructureView: React.FC<KpiStructureViewProps> = ({
           </table>
         </div>
       </div>
+
+      {selectedDept === 'SALES' && (
+        <div className="bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-5 rounded-2xl shadow-md border border-emerald-700/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-emerald-300 font-extrabold text-sm uppercase tracking-wider">
+              <Calculator className="h-5 w-5 text-emerald-400" />
+              <span>Sales KPI Calculation Formula & Rules (Evaluator: Team Leader / TL)</span>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-xs font-black">
+              Total Weight: 100%
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Monthly Benchmark & Evaluator</div>
+              <div className="text-lg font-black text-emerald-400 mt-1">15 Offline Base (TL Assessed)</div>
+              <p className="text-slate-300 mt-1 text-[11px]">Assessed by Team Leader (TL) based on total monthly client meetings held.</p>
+            </div>
+
+            <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Online Conversion Rate</div>
+              <div className="text-lg font-black text-teal-300 mt-1">3 Online = 1 Offline</div>
+              <p className="text-slate-300 mt-1 text-[11px]">Every 3 online meetings count as 1 offline meeting completed towards target.</p>
+            </div>
+
+            <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700">
+              <div className="text-slate-400 font-bold uppercase text-[10px]">Over-Achievement Supported</div>
+              <div className="text-lg font-black text-amber-300 mt-1">e.g. 18 Meetings = 120%</div>
+              <p className="text-slate-300 mt-1 text-[11px]">Exceeding 15 required meetings yields over-achievement scores (&gt;100%).</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

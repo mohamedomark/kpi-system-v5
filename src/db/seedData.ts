@@ -1,9 +1,174 @@
-import { Department, Employee, KPI } from '../types';
+import { Department, Employee, KPI, User, Goal } from '../types';
 
 export const INITIAL_DEPARTMENTS: Department[] = [
   { id: 'DEV', name: 'Development' },
   { id: 'QA', name: 'Quality Assurance' },
   { id: 'PO', name: 'Product Owners' },
+  { id: 'SALES', name: 'Sales' },
+];
+
+export const INITIAL_USERS: User[] = [
+  {
+    id: 'usr_admin',
+    username: 'admin',
+    name: 'System Administrator',
+    email: 'admin@company.com',
+    role: 'ADMIN',
+    password: 'admin',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_cto',
+    username: 'cto',
+    name: 'Chief Technology Officer (CTO)',
+    email: 'cto@company.com',
+    role: 'CTO',
+    departmentId: 'DEV',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_po',
+    username: 'po',
+    name: 'Product Owner (PO)',
+    email: 'po@company.com',
+    role: 'PO',
+    departmentId: 'PO',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_om',
+    username: 'om',
+    name: 'Operations Manager (OM)',
+    email: 'om@company.com',
+    role: 'OM',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_hr',
+    username: 'hr',
+    name: 'Human Resources (HR)',
+    email: 'hr@company.com',
+    role: 'HR',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_accountant',
+    username: 'accountant',
+    name: 'Company Accountant (Reviewer)',
+    email: 'accountant@company.com',
+    role: 'ACCOUNTANT',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_omar',
+    username: 'omar.rezk',
+    name: 'Omar rezk',
+    email: 'omar.rezk@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'DEV',
+    employeeId: 'emp_dev_1',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_helmy',
+    username: 'ahmed.helmy',
+    name: 'Ahmed Helmy',
+    email: 'ahmed.helmy@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'QA',
+    employeeId: 'emp_qa_1',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_zaghloul',
+    username: 'ahmed.zaghloul',
+    name: 'ahmed zaghloul',
+    email: 'a.zaghloul@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'PO',
+    employeeId: 'emp_po_1',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_shahab',
+    username: 'shahab',
+    name: 'Shahab',
+    email: 'shahab@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'SALES',
+    employeeId: 'emp_sales_1',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_omar_ibyari',
+    username: 'omar.ibyari',
+    name: 'Omar El-Ibyari',
+    email: 'omar.ibyari@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'SALES',
+    employeeId: 'emp_sales_2',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_omar_othman',
+    username: 'omar.othman',
+    name: 'Omar Othman',
+    email: 'omar.othman@company.com',
+    role: 'EMPLOYEE',
+    departmentId: 'SALES',
+    employeeId: 'emp_sales_3',
+    password: '123',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export const INITIAL_GOALS: Goal[] = [
+  {
+    id: 'goal_1',
+    userId: 'usr_omar',
+    title: 'Achieve 95%+ One Time Delivery in DEV',
+    description: 'Ensure all allocated sprint tickets and features pass code review and deployment deadlines.',
+    departmentId: 'DEV',
+    category: 'KPI Target',
+    status: 'IN_PROGRESS',
+    progressPct: 80,
+    targetDate: '2026-08-31',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'goal_2',
+    userId: 'usr_omar',
+    title: 'Integrate AI Copilot into Daily Development Workflow',
+    description: 'Utilize Gemini / AI assistant tools to accelerate code generation and unit test coverage.',
+    departmentId: 'DEV',
+    category: 'Skill Improvement',
+    status: 'COMPLETED',
+    progressPct: 100,
+    targetDate: '2026-08-15',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'goal_3',
+    userId: 'usr_helmy',
+    title: 'Automate 80% of Core QA Regression Test Suites',
+    description: 'Reduce manual bug verification cycles by writing automated e2e test scripts.',
+    departmentId: 'QA',
+    category: 'Project Milestone',
+    status: 'IN_PROGRESS',
+    progressPct: 65,
+    targetDate: '2026-09-15',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 export const INITIAL_EMPLOYEES: Omit<Employee, 'id' | 'createdAt'>[] = [
@@ -34,6 +199,11 @@ export const INITIAL_EMPLOYEES: Omit<Employee, 'id' | 'createdAt'>[] = [
   { name: 'ahmed zaghloul', departmentId: 'PO', isActive: true },
   { name: 'mohamed omar', departmentId: 'PO', isActive: true },
   { name: 'mohmoud Elsayed', departmentId: 'PO', isActive: true },
+
+  // Sales Employees
+  { name: 'Shahab', departmentId: 'SALES', isActive: true },
+  { name: 'Omar El-Ibyari', departmentId: 'SALES', isActive: true },
+  { name: 'Omar Othman', departmentId: 'SALES', isActive: true },
 ];
 
 export const INITIAL_KPIS: Omit<KPI, 'id'>[] = [
@@ -72,4 +242,12 @@ export const INITIAL_KPIS: Omit<KPI, 'id'>[] = [
   { departmentId: 'PO', name: 'Quality Of Traning', evaluatorRole: 'CTO', weight: 5 },
   { departmentId: 'PO', name: 'Workflow', evaluatorRole: 'OM', weight: 5 },
   { departmentId: 'PO', name: 'Presentation Skill', evaluatorRole: 'CTO', weight: 5 },
+
+  // Sales KPIs (Total = 100)
+  {
+    departmentId: 'SALES',
+    name: 'Sales Client Meetings Target (15 Offline Required; 3 Online = 1 Offline)',
+    evaluatorRole: 'TL',
+    weight: 100,
+  },
 ];
