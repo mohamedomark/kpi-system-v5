@@ -2,6 +2,11 @@ import { Department, Employee, KPI, Evaluation, DepartmentCode, User, Goal, Self
 import { localStore } from './localStore';
 
 export const api = {
+  // --- Data Subscription ---
+  subscribeToDataChanges: (callback: () => void): (() => void) => {
+    return localStore.subscribe(callback);
+  },
+
   // --- Cloud Sync ---
   syncWithCloud: (): Promise<void> =>
     localStore.syncWithCloud(),

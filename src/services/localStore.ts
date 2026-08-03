@@ -5,7 +5,8 @@ import {
   saveDocument,
   deleteDocument,
   batchSaveDocuments,
-  fetchAllCollection
+  fetchAllCollection,
+  subscribeToCollection
 } from './firestoreSync';
 
 const STORAGE_KEY = 'employee_kpi_performance_db';
@@ -65,9 +66,108 @@ class LocalStore {
   };
 
   private isCloudSynced = false;
+  private isListeningToCloud = false;
+  private listeners: Array<() => void> = [];
 
   constructor() {
     this.initLocal();
+    this.initCloudListeners();
+  }
+
+  public subscribe(listener: () => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((l) => {
+      try {
+        l();
+      } catch (e) {
+        console.error('Error in localStore listener:', e);
+      }
+    });
+  }
+
+  public initCloudListeners() {
+    if (this.isListeningToCloud) return;
+    this.isListeningToCloud = true;
+
+    subscribeToCollection<Department>(COLLECTIONS.departments, (cloudDepts) => {
+      if (cloudDepts.length > 0) {
+        this.db.departments = deduplicateById(cloudDepts);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<Employee>(COLLECTIONS.employees, (cloudEmps) => {
+      if (cloudEmps.length > 0) {
+        this.db.employees = deduplicateById(cloudEmps);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<KPI>(COLLECTIONS.kpis, (cloudKpis) => {
+      if (cloudKpis.length > 0) {
+        this.db.kpis = deduplicateById(cloudKpis);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<Evaluation>(COLLECTIONS.evaluations, (cloudEvals) => {
+      if (cloudEvals.length > 0) {
+        this.db.evaluations = deduplicateById(cloudEvals);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<User>(COLLECTIONS.users, (cloudUsers) => {
+      if (cloudUsers.length > 0) {
+        const userMap = new Map<string, User>();
+        this.db.users.forEach((u) => userMap.set(u.id, u));
+        cloudUsers.forEach((u) => userMap.set(u.id, u));
+
+        INITIAL_USERS.forEach((u) => {
+          if (!userMap.has(u.id) && !Array.from(userMap.values()).some((x) => x.username.toLowerCase() === u.username.toLowerCase())) {
+            userMap.set(u.id, u);
+          }
+        });
+
+        this.db.users = Array.from(userMap.values());
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<Goal>(COLLECTIONS.goals, (cloudGoals) => {
+      if (cloudGoals.length > 0) {
+        this.db.goals = deduplicateById(cloudGoals);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<SelfAppraisal>(COLLECTIONS.selfAppraisals, (cloudSelf) => {
+      if (cloudSelf.length > 0) {
+        this.db.selfAppraisals = deduplicateById(cloudSelf);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
+
+    subscribeToCollection<FeedbackRequest>(COLLECTIONS.feedbackRequests, (cloudFeedback) => {
+      if (cloudFeedback.length > 0) {
+        this.db.feedbackRequests = deduplicateById(cloudFeedback);
+        this.persistLocal();
+        this.notifyListeners();
+      }
+    });
   }
 
   private initLocal() {
@@ -373,6 +473,7 @@ class LocalStore {
       if (userData.employeeId !== undefined) existing.employeeId = userData.employeeId;
       if (userData.password) existing.password = userData.password;
       this.persistLocal();
+      this.notifyListeners();
       savedUser = existing;
     } else {
       const newUser: User = {
@@ -389,6 +490,7 @@ class LocalStore {
       this.db.users.push(newUser);
       this.db.users = deduplicateById(this.db.users);
       this.persistLocal();
+      this.notifyListeners();
       savedUser = newUser;
     }
 
@@ -408,6 +510,7 @@ class LocalStore {
       (u) => u.id !== idOrUsername && u.username.toLowerCase() !== idOrUsername.toLowerCase()
     );
     this.persistLocal();
+    this.notifyListeners();
   }
 
   // --- Goals APIs ---
@@ -432,6 +535,7 @@ class LocalStore {
       if (goalData.progressPct !== undefined) existing.progressPct = goalData.progressPct;
       if (goalData.targetDate) existing.targetDate = goalData.targetDate;
       this.persistLocal();
+      this.notifyListeners();
       savedGoal = existing;
     } else {
       const newGoal: Goal = {
@@ -448,6 +552,7 @@ class LocalStore {
       };
       this.db.goals.push(newGoal);
       this.persistLocal();
+      this.notifyListeners();
       savedGoal = newGoal;
     }
 
@@ -459,6 +564,7 @@ class LocalStore {
     deleteDocument(COLLECTIONS.goals, id);
     this.db.goals = this.db.goals.filter((g) => g.id !== id);
     this.persistLocal();
+    this.notifyListeners();
   }
 
   // --- Self Appraisals APIs ---
@@ -498,6 +604,7 @@ class LocalStore {
       if (data.selfNotes !== undefined) existing.selfNotes = data.selfNotes;
       existing.updatedAt = new Date().toISOString();
       this.persistLocal();
+      this.notifyListeners();
       savedSA = existing;
     } else {
       const newSA: SelfAppraisal = {
@@ -515,6 +622,7 @@ class LocalStore {
       };
       this.db.selfAppraisals.push(newSA);
       this.persistLocal();
+      this.notifyListeners();
       savedSA = newSA;
     }
 
@@ -550,6 +658,7 @@ class LocalStore {
     };
     this.db.feedbackRequests.push(newReq);
     this.persistLocal();
+    this.notifyListeners();
 
     saveDocument(COLLECTIONS.feedbackRequests, newReq);
     return newReq;
@@ -562,6 +671,7 @@ class LocalStore {
       req.status = 'RESOLVED';
       req.repliedAt = new Date().toISOString();
       this.persistLocal();
+      this.notifyListeners();
 
       saveDocument(COLLECTIONS.feedbackRequests, req);
       return req;
@@ -601,6 +711,7 @@ class LocalStore {
     };
     this.db.employees.push(newEmp);
     this.persistLocal();
+    this.notifyListeners();
 
     saveDocument(COLLECTIONS.employees, newEmp);
     return newEmp;
@@ -615,6 +726,7 @@ class LocalStore {
     if (updates.isActive !== undefined) emp.isActive = updates.isActive;
 
     this.persistLocal();
+    this.notifyListeners();
     saveDocument(COLLECTIONS.employees, emp);
     return emp;
   }
@@ -680,6 +792,7 @@ class LocalStore {
       if (notes !== undefined) existing.notes = notes;
       existing.updatedAt = new Date().toISOString();
       this.persistLocal();
+      this.notifyListeners();
       savedEval = existing;
     } else {
       const newEval: Evaluation = {
@@ -697,6 +810,7 @@ class LocalStore {
       };
       this.db.evaluations.push(newEval);
       this.persistLocal();
+      this.notifyListeners();
       savedEval = newEval;
     }
 
@@ -722,6 +836,7 @@ class LocalStore {
       results.push(this.saveEvaluation(item));
     });
     batchSaveDocuments(COLLECTIONS.evaluations, results);
+    this.notifyListeners();
     return results;
   }
 }

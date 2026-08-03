@@ -65,7 +65,7 @@ export default function App() {
     }
   }, [selectedMonth, selectedYear]);
 
-  // Initial load
+  // Initial load and real-time synchronization setup
   useEffect(() => {
     async function init() {
       setLoading(true);
@@ -79,6 +79,18 @@ export default function App() {
       setLoading(false);
     }
     init();
+
+    // Listen to real-time cloud and local store updates
+    const unsubscribe = api.subscribeToDataChanges(() => {
+      loadBaseData();
+      loadEmployees();
+      loadEvaluations();
+      api.getCurrentUser().then((u) => {
+        if (u) setCurrentUser(u);
+      });
+    });
+
+    return () => unsubscribe();
   }, [loadBaseData, loadEmployees, loadEvaluations]);
 
   // Handle Login

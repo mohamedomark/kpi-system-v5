@@ -109,18 +109,26 @@ export const UserPortal: React.FC<UserPortalProps> = ({
     );
   }
 
-  // Load user data
+  // Load user data & set up real-time listener
   useEffect(() => {
     loadGoals();
     loadFeedback();
     loadUsers();
-  }, [currentUser]);
-
-  useEffect(() => {
     if (linkedEmployee) {
       loadSelfAppraisals();
     }
-  }, [linkedEmployee, selectedMonth, selectedYear]);
+
+    const unsubscribe = api.subscribeToDataChanges(() => {
+      loadGoals();
+      loadFeedback();
+      loadUsers();
+      if (linkedEmployee) {
+        loadSelfAppraisals();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser, linkedEmployee, selectedMonth, selectedYear]);
 
   const loadGoals = async () => {
     try {
