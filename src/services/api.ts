@@ -10,12 +10,8 @@ export const api = {
   getCurrentUser: (): Promise<User | null> =>
     Promise.resolve(localStore.getCurrentSessionUser()),
 
-  login: (username: string, password?: string): Promise<User> => {
-    try {
-      return Promise.resolve(localStore.loginUser(username, password));
-    } catch (err: any) {
-      return Promise.reject(err);
-    }
+  login: async (username: string, password?: string): Promise<User> => {
+    return await localStore.loginUser(username, password);
   },
 
   logout: (): Promise<void> => {
@@ -23,18 +19,21 @@ export const api = {
     return Promise.resolve();
   },
 
-  getUsers: (): Promise<User[]> =>
-    Promise.resolve(localStore.getUsers()),
+  getUsers: async (): Promise<User[]> => {
+    await localStore.syncWithCloud();
+    return localStore.getUsers();
+  },
 
-  saveUser: (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> =>
-    Promise.resolve(localStore.saveUser(userData)),
+  saveUser: async (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> => {
+    return await localStore.saveUser(userData);
+  },
 
-  addUser: (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> =>
-    Promise.resolve(localStore.saveUser(userData)),
+  addUser: async (userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> => {
+    return await localStore.saveUser(userData);
+  },
 
-  deleteUser: (id: string): Promise<void> => {
-    localStore.deleteUser(id);
-    return Promise.resolve();
+  deleteUser: async (id: string): Promise<void> => {
+    await localStore.deleteUser(id);
   },
 
   // --- Goals ---

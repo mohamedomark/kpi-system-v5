@@ -136,30 +136,35 @@ class LocalStore {
       ]);
 
       // If Firestore database is empty, seed Firestore with current database
-      if (cloudDepts.length === 0 && cloudEmps.length === 0) {
+      if (cloudDepts.length === 0 && cloudEmps.length === 0 && cloudUsers.length === 0) {
         console.log('Firebase Firestore is empty. Seeding initial data to Firestore...');
         await this.seedDefaultsToCloud();
       } else {
         // Hydrate local database with Firestore records
-        if (cloudDepts.length > 0) this.db.departments = deduplicateById(cloudDepts);
-        if (cloudEmps.length > 0) this.db.employees = deduplicateById(cloudEmps);
-        if (cloudKpis.length > 0) this.db.kpis = deduplicateById(cloudKpis);
-        if (cloudEvals.length > 0) this.db.evaluations = deduplicateById(cloudEvals);
-        if (cloudUsers.length > 0) {
-          let mergedUsers = deduplicateById(cloudUsers);
-          // Ensure super user is always preserved
-          INITIAL_USERS.forEach((u) => {
-            if (!mergedUsers.some((x) => x.id === u.id || x.username.toLowerCase() === u.username.toLowerCase())) {
-              mergedUsers.push(u);
-            }
-          });
-          this.db.users = mergedUsers;
-        }
-        if (cloudGoals.length > 0) this.db.goals = deduplicateById(cloudGoals);
-        if (cloudSelf.length > 0) this.db.selfAppraisals = deduplicateById(cloudSelf);
-        if (cloudFeedback.length > 0) this.db.feedbackRequests = deduplicateById(cloudFeedback);
+        if (cloudDepts.length > 0) this.db.departments = deduplicateById([...cloudDepts, ...this.db.departments]);
+        if (cloudEmps.length > 0) this.db.employees = deduplicateById([...cloudEmps, ...this.db.employees]);
+        if (cloudKpis.length > 0) this.db.kpis = deduplicateById([...cloudKpis, ...this.db.kpis]);
+        if (cloudEvals.length > 0) this.db.evaluations = deduplicateById([...cloudEvals, ...this.db.evaluations]);
+        
+        // Merge local and cloud users so any user created on any device is retained and synced
+        const userMap = new Map<string, User>();
+        this.db.users.forEach((u) => userMap.set(u.id, u));
+        cloudUsers.forEach((u) => userMap.set(u.id, u));
+
+        INITIAL_USERS.forEach((u) => {
+          if (!userMap.has(u.id) && !Array.from(userMap.values()).some((x) => x.username.toLowerCase() === u.username.toLowerCase())) {
+            userMap.set(u.id, u);
+          }
+        });
+
+        this.db.users = Array.from(userMap.values());
+
+        if (cloudGoals.length > 0) this.db.goals = deduplicateById([...cloudGoals, ...this.db.goals]);
+        if (cloudSelf.length > 0) this.db.selfAppraisals = deduplicateById([...cloudSelf, ...this.db.selfAppraisals]);
+        if (cloudFeedback.length > 0) this.db.feedbackRequests = deduplicateById([...cloudFeedback, ...this.db.feedbackRequests]);
 
         this.persistLocal();
+        await this.seedDefaultsToCloud();
       }
       this.isCloudSynced = true;
       console.log('Successfully synchronized with Firebase Firestore standalone database.');
@@ -331,7 +336,8 @@ class LocalStore {
     return null;
   }
 
-  public loginUser(username: string, password?: string): User {
+  public async loginUser(username: string, password?: string): Promise<User> {
+    await this.syncWithCloud();
     const trimmed = username.trim().toLowerCase();
     const user = this.db.users.find((u) => u.username.toLowerCase() === trimmed);
     if (!user) {
@@ -354,7 +360,7 @@ class LocalStore {
     return this.db.users.filter((u) => u.username.toLowerCase() !== 'super' && u.role !== 'SUPER_ADMIN');
   }
 
-  public saveUser(userData: Partial<User> & { username: string; name: string; role: User['role'] }): User {
+  public async saveUser(userData: Partial<User> & { username: string; name: string; role: User['role'] }): Promise<User> {
     let existing = userData.id ? this.db.users.find((u) => u.id === userData.id) : null;
     let savedUser: User;
 
@@ -386,16 +392,16 @@ class LocalStore {
       savedUser = newUser;
     }
 
-    saveDocument(COLLECTIONS.users, savedUser);
+    await saveDocument(COLLECTIONS.users, savedUser);
     return savedUser;
   }
 
-  public deleteUser(idOrUsername: string): void {
+  public async deleteUser(idOrUsername: string): Promise<void> {
     const target = this.db.users.find(
       (u) => u.id === idOrUsername || u.username.toLowerCase() === idOrUsername.toLowerCase()
     );
     if (target) {
-      deleteDocument(COLLECTIONS.users, target.id);
+      await deleteDocument(COLLECTIONS.users, target.id);
     }
 
     this.db.users = this.db.users.filter(
