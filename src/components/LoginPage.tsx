@@ -110,6 +110,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onGuestContinue }
             </div>
           )}
 
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">

@@ -70,6 +70,7 @@ export default function App() {
     async function init() {
       setLoading(true);
       setError(null);
+      await api.syncWithCloud();
       const activeUser = await api.getCurrentUser();
       setCurrentUser(activeUser);
       await loadBaseData();

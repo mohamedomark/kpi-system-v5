@@ -466,12 +466,12 @@ export const EmployeeManagement: React.FC<EmployeeManagementProps> = ({
                     onChange={(e) => setNewRole(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500"
                   >
+                    <option value="ADMIN">ADMIN (System Administrator)</option>
                     <option value="CTO">CTO (Chief Technology Officer)</option>
                     <option value="PO">PO (Product Owner)</option>
                     <option value="OM">OM (Operations Manager)</option>
                     <option value="HR">HR (Human Resources)</option>
                     <option value="ACCOUNTANT">ACCOUNTANT (Reviewer - Read Only)</option>
-                    <option value="ADMIN">ADMIN (System Administrator)</option>
                     <option value="EVALUATOR">EVALUATOR</option>
                     <option value="EMPLOYEE">EMPLOYEE</option>
                   </select>

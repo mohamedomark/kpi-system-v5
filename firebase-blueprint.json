@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "users": {
+      "title": "users",
+      "description": "User accounts and authentication profiles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "username", "name", "role"]
+    },
+    "departments": {
+      "title": "departments",
+      "description": "Company departments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
+    },
+    "employees": {
+      "title": "employees",
+      "description": "Company employees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "joinDate": { "type": "string" },
+        "position": { "type": "string" }
+      },
+      "required": ["id", "name", "departmentId"]
+    },
+    "kpis": {
+      "title": "kpis",
+      "description": "Key Performance Indicators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "name": { "type": "string" },
+        "weight": { "type": "number" },
+        "evaluatorRole": { "type": "string" },
+        "description": { "type": "string" },
+        "maxScore": { "type": "number" },
+        "formula": { "type": "string" }
+      },
+      "required": ["id", "departmentId", "name", "weight", "evaluatorRole"]
+    },
+    "evaluations": {
+      "title": "evaluations",
+      "description": "KPI monthly evaluations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "kpiId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "evaluatorId": { "type": "string" },
+        "w1Pct": { "type": "number" },
+        "w2Pct": { "type": "number" },
+        "w3Pct": { "type": "number" },
+        "w4Pct": { "type": "number" },
+        "notes": { "type": "string" },
+        "totalScore": { "type": "number" },
+        "weightedScore": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "kpiId", "month", "year"]
+    },
+    "goals": {
+      "title": "goals",
+      "description": "Employee and department goals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "title": { "type": "string" },
+        "targetDate": { "type": "string" },
+        "status": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "departmentId", "title"]
+    },
+    "selfAppraisals": {
+      "title": "selfAppraisals",
+      "description": "Employee self appraisal submissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "kpiId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "selfW1Pct": { "type": "number" },
+        "selfW2Pct": { "type": "number" },
+        "selfW3Pct": { "type": "number" },
+        "selfW4Pct": { "type": "number" },
+        "selfNotes": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "employeeId", "kpiId", "month", "year"]
+    },
+    "feedbackRequests": {
+      "title": "feedbackRequests",
+      "description": "Feedback and review requests",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "evaluatorRole": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "replyMessage": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "repliedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "employeeId", "evaluatorRole", "subject"]
+    }
+  }
+}

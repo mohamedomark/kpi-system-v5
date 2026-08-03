@@ -2,6 +2,10 @@ import { Department, Employee, KPI, Evaluation, DepartmentCode, User, Goal, Self
 import { localStore } from './localStore';
 
 export const api = {
+  // --- Cloud Sync ---
+  syncWithCloud: (): Promise<void> =>
+    localStore.syncWithCloud(),
+
   // --- Auth & Users ---
   getCurrentUser: (): Promise<User | null> =>
     Promise.resolve(localStore.getCurrentSessionUser()),

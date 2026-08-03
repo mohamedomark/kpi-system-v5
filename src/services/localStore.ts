@@ -1,5 +1,12 @@
 import { Department, Employee, KPI, Evaluation, DepartmentCode, User, Goal, SelfAppraisal, FeedbackRequest } from '../types';
 import { INITIAL_DEPARTMENTS, INITIAL_EMPLOYEES, INITIAL_KPIS, INITIAL_USERS, INITIAL_GOALS } from '../db/seedData';
+import {
+  COLLECTIONS,
+  saveDocument,
+  deleteDocument,
+  batchSaveDocuments,
+  fetchAllCollection
+} from './firestoreSync';
 
 const STORAGE_KEY = 'employee_kpi_performance_db';
 const AUTH_KEY = 'employee_kpi_current_user';
@@ -57,11 +64,13 @@ class LocalStore {
     feedbackRequests: [],
   };
 
+  private isCloudSynced = false;
+
   constructor() {
-    this.init();
+    this.initLocal();
   }
 
-  private init() {
+  private initLocal() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -78,50 +87,21 @@ class LocalStore {
             feedbackRequests: deduplicateById(parsed.feedbackRequests || []),
           };
 
-          // Ensure missing departments (e.g. SALES) exist in localStorage
+          // Ensure missing departments exist
           INITIAL_DEPARTMENTS.forEach((d) => {
             if (!this.db.departments.some((x) => x.id === d.id)) {
               this.db.departments.push(d);
             }
           });
 
-          // Ensure missing default KPIs exist
-          INITIAL_KPIS.forEach((kpi, idx) => {
-            const id = `kpi_${kpi.departmentId.toLowerCase()}_${idx + 1}`;
-            if (!this.db.kpis.some((x) => x.id === id || (x.departmentId === kpi.departmentId && x.name === kpi.name))) {
-              this.db.kpis.push({ ...kpi, id });
-            }
-          });
-
-          // If Sales department has old multi-kpi structure, update Sales KPIs to the single 100% TL KPI
-          const salesKpisInDb = this.db.kpis.filter((k) => k.departmentId === 'SALES');
-          if (salesKpisInDb.length > 1 || salesKpisInDb.some((k) => k.weight !== 100)) {
-            this.db.kpis = this.db.kpis.filter((k) => k.departmentId !== 'SALES');
-            INITIAL_KPIS.filter((k) => k.departmentId === 'SALES').forEach((kpi, idx) => {
-              this.db.kpis.push({ ...kpi, id: `kpi_sales_${idx + 1}` });
-            });
-          }
-
-          // Ensure missing default employees exist
-          INITIAL_EMPLOYEES.forEach((emp, idx) => {
-            if (!this.db.employees.some((x) => x.name.toLowerCase() === emp.name.toLowerCase() && x.departmentId === emp.departmentId)) {
-              this.db.employees.push({
-                ...emp,
-                id: `emp_${emp.departmentId.toLowerCase()}_${idx + 1}`,
-                createdAt: new Date().toISOString(),
-              });
-            }
-          });
-
-          // Ensure missing default users exist
+          // Ensure missing default users (including super admin) exist
           INITIAL_USERS.forEach((u) => {
             if (!this.db.users.some((x) => x.id === u.id || x.username.toLowerCase() === u.username.toLowerCase())) {
               this.db.users.push(u);
             }
           });
 
-          this.persist();
-          console.log(`Database '${SYSTEM_NAME}' loaded from localStorage.`);
+          this.persistLocal();
           return;
         }
       }
@@ -129,10 +109,79 @@ class LocalStore {
       console.error('Error reading localStorage, re-initializing seed data.', e);
     }
 
-    this.seedDefaults();
+    this.seedDefaultsLocal();
   }
 
-  public seedDefaults() {
+  // Two-way Firestore database sync
+  public async syncWithCloud(): Promise<void> {
+    try {
+      const [
+        cloudDepts,
+        cloudEmps,
+        cloudKpis,
+        cloudEvals,
+        cloudUsers,
+        cloudGoals,
+        cloudSelf,
+        cloudFeedback
+      ] = await Promise.all([
+        fetchAllCollection<Department>(COLLECTIONS.departments),
+        fetchAllCollection<Employee>(COLLECTIONS.employees),
+        fetchAllCollection<KPI>(COLLECTIONS.kpis),
+        fetchAllCollection<Evaluation>(COLLECTIONS.evaluations),
+        fetchAllCollection<User>(COLLECTIONS.users),
+        fetchAllCollection<Goal>(COLLECTIONS.goals),
+        fetchAllCollection<SelfAppraisal>(COLLECTIONS.selfAppraisals),
+        fetchAllCollection<FeedbackRequest>(COLLECTIONS.feedbackRequests),
+      ]);
+
+      // If Firestore database is empty, seed Firestore with current database
+      if (cloudDepts.length === 0 && cloudEmps.length === 0) {
+        console.log('Firebase Firestore is empty. Seeding initial data to Firestore...');
+        await this.seedDefaultsToCloud();
+      } else {
+        // Hydrate local database with Firestore records
+        if (cloudDepts.length > 0) this.db.departments = deduplicateById(cloudDepts);
+        if (cloudEmps.length > 0) this.db.employees = deduplicateById(cloudEmps);
+        if (cloudKpis.length > 0) this.db.kpis = deduplicateById(cloudKpis);
+        if (cloudEvals.length > 0) this.db.evaluations = deduplicateById(cloudEvals);
+        if (cloudUsers.length > 0) {
+          let mergedUsers = deduplicateById(cloudUsers);
+          // Ensure super user is always preserved
+          INITIAL_USERS.forEach((u) => {
+            if (!mergedUsers.some((x) => x.id === u.id || x.username.toLowerCase() === u.username.toLowerCase())) {
+              mergedUsers.push(u);
+            }
+          });
+          this.db.users = mergedUsers;
+        }
+        if (cloudGoals.length > 0) this.db.goals = deduplicateById(cloudGoals);
+        if (cloudSelf.length > 0) this.db.selfAppraisals = deduplicateById(cloudSelf);
+        if (cloudFeedback.length > 0) this.db.feedbackRequests = deduplicateById(cloudFeedback);
+
+        this.persistLocal();
+      }
+      this.isCloudSynced = true;
+      console.log('Successfully synchronized with Firebase Firestore standalone database.');
+    } catch (err) {
+      console.error('Failed to sync with Firebase Firestore:', err);
+    }
+  }
+
+  private async seedDefaultsToCloud() {
+    await Promise.all([
+      batchSaveDocuments(COLLECTIONS.departments, this.db.departments),
+      batchSaveDocuments(COLLECTIONS.employees, this.db.employees),
+      batchSaveDocuments(COLLECTIONS.kpis, this.db.kpis),
+      batchSaveDocuments(COLLECTIONS.evaluations, this.db.evaluations),
+      batchSaveDocuments(COLLECTIONS.users, this.db.users),
+      batchSaveDocuments(COLLECTIONS.goals, this.db.goals),
+      batchSaveDocuments(COLLECTIONS.selfAppraisals, this.db.selfAppraisals),
+      batchSaveDocuments(COLLECTIONS.feedbackRequests, this.db.feedbackRequests),
+    ]);
+  }
+
+  private seedDefaultsLocal() {
     const departments: Department[] = INITIAL_DEPARTMENTS;
 
     const employees: Employee[] = INITIAL_EMPLOYEES.map((emp, idx) => ({
@@ -151,7 +200,6 @@ class LocalStore {
     const selfAppraisals: SelfAppraisal[] = [];
     const feedbackRequests: FeedbackRequest[] = [];
 
-    // Pre-populate realistic sample evaluations for current and previous month
     const evaluations: Evaluation[] = [];
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
@@ -197,11 +245,15 @@ class LocalStore {
       feedbackRequests,
     };
 
-    this.persist();
-    console.log(`Database '${SYSTEM_NAME}' seeded successfully.`);
+    this.persistLocal();
   }
 
-  private persist() {
+  public seedDefaults() {
+    this.seedDefaultsLocal();
+    this.seedDefaultsToCloud();
+  }
+
+  private persistLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.db));
     } catch (e) {
@@ -246,7 +298,8 @@ class LocalStore {
     }
 
     this.db = { departments, employees, kpis, evaluations, users, goals, selfAppraisals, feedbackRequests };
-    this.persist();
+    this.persistLocal();
+    this.seedDefaultsToCloud();
 
     return {
       success: true,
@@ -269,7 +322,6 @@ class LocalStore {
       const raw = localStorage.getItem(AUTH_KEY);
       if (raw) {
         const u = JSON.parse(raw);
-        // Verify user exists in current DB
         const match = this.db.users.find((x) => x.id === u.id);
         if (match) return match;
       }
@@ -296,12 +348,16 @@ class LocalStore {
     localStorage.removeItem(AUTH_KEY);
   }
 
-  public getUsers(): User[] {
-    return this.db.users;
+  public getUsers(includeSuper = false): User[] {
+    if (includeSuper) return this.db.users;
+    // Hide super admin account from user management UI
+    return this.db.users.filter((u) => u.username.toLowerCase() !== 'super' && u.role !== 'SUPER_ADMIN');
   }
 
   public saveUser(userData: Partial<User> & { username: string; name: string; role: User['role'] }): User {
     let existing = userData.id ? this.db.users.find((u) => u.id === userData.id) : null;
+    let savedUser: User;
+
     if (existing) {
       if (userData.name) existing.name = userData.name.trim();
       if (userData.username) existing.username = userData.username.trim();
@@ -310,8 +366,8 @@ class LocalStore {
       if (userData.departmentId !== undefined) existing.departmentId = userData.departmentId;
       if (userData.employeeId !== undefined) existing.employeeId = userData.employeeId;
       if (userData.password) existing.password = userData.password;
-      this.persist();
-      return existing;
+      this.persistLocal();
+      savedUser = existing;
     } else {
       const newUser: User = {
         id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -319,23 +375,33 @@ class LocalStore {
         name: userData.name.trim(),
         email: userData.email || `${userData.username.trim()}@company.com`,
         role: userData.role,
-        departmentId: userData.departmentId,
-        employeeId: userData.employeeId,
+        ...(userData.departmentId ? { departmentId: userData.departmentId } : {}),
+        ...(userData.employeeId ? { employeeId: userData.employeeId } : {}),
         password: userData.password || '123',
         createdAt: new Date().toISOString(),
       };
       this.db.users.push(newUser);
       this.db.users = deduplicateById(this.db.users);
-      this.persist();
-      return newUser;
+      this.persistLocal();
+      savedUser = newUser;
     }
+
+    saveDocument(COLLECTIONS.users, savedUser);
+    return savedUser;
   }
 
   public deleteUser(idOrUsername: string): void {
+    const target = this.db.users.find(
+      (u) => u.id === idOrUsername || u.username.toLowerCase() === idOrUsername.toLowerCase()
+    );
+    if (target) {
+      deleteDocument(COLLECTIONS.users, target.id);
+    }
+
     this.db.users = this.db.users.filter(
       (u) => u.id !== idOrUsername && u.username.toLowerCase() !== idOrUsername.toLowerCase()
     );
-    this.persist();
+    this.persistLocal();
   }
 
   // --- Goals APIs ---
@@ -349,6 +415,8 @@ class LocalStore {
   }
 
   public saveGoal(goalData: Partial<Goal> & { userId: string; title: string; departmentId: DepartmentCode }): Goal {
+    let savedGoal: Goal;
+
     let existing = goalData.id ? this.db.goals.find((g) => g.id === goalData.id) : null;
     if (existing) {
       if (goalData.title) existing.title = goalData.title.trim();
@@ -357,8 +425,8 @@ class LocalStore {
       if (goalData.status) existing.status = goalData.status;
       if (goalData.progressPct !== undefined) existing.progressPct = goalData.progressPct;
       if (goalData.targetDate) existing.targetDate = goalData.targetDate;
-      this.persist();
-      return existing;
+      this.persistLocal();
+      savedGoal = existing;
     } else {
       const newGoal: Goal = {
         id: `goal_${Date.now()}`,
@@ -373,14 +441,18 @@ class LocalStore {
         createdAt: new Date().toISOString(),
       };
       this.db.goals.push(newGoal);
-      this.persist();
-      return newGoal;
+      this.persistLocal();
+      savedGoal = newGoal;
     }
+
+    saveDocument(COLLECTIONS.goals, savedGoal);
+    return savedGoal;
   }
 
   public deleteGoal(id: string): void {
+    deleteDocument(COLLECTIONS.goals, id);
     this.db.goals = this.db.goals.filter((g) => g.id !== id);
-    this.persist();
+    this.persistLocal();
   }
 
   // --- Self Appraisals APIs ---
@@ -402,6 +474,8 @@ class LocalStore {
     selfW4Pct?: number | null;
     selfNotes?: string;
   }): SelfAppraisal {
+    let savedSA: SelfAppraisal;
+
     let existing = this.db.selfAppraisals.find(
       (sa) =>
         sa.employeeId === data.employeeId &&
@@ -417,8 +491,8 @@ class LocalStore {
       if (data.selfW4Pct !== undefined) existing.selfW4Pct = data.selfW4Pct;
       if (data.selfNotes !== undefined) existing.selfNotes = data.selfNotes;
       existing.updatedAt = new Date().toISOString();
-      this.persist();
-      return existing;
+      this.persistLocal();
+      savedSA = existing;
     } else {
       const newSA: SelfAppraisal = {
         id: `sa_${data.employeeId}_${data.kpiId}_${data.year}_${data.month}`,
@@ -434,9 +508,12 @@ class LocalStore {
         updatedAt: new Date().toISOString(),
       };
       this.db.selfAppraisals.push(newSA);
-      this.persist();
-      return newSA;
+      this.persistLocal();
+      savedSA = newSA;
     }
+
+    saveDocument(COLLECTIONS.selfAppraisals, savedSA);
+    return savedSA;
   }
 
   // --- Feedback Requests APIs ---
@@ -466,7 +543,9 @@ class LocalStore {
       createdAt: new Date().toISOString(),
     };
     this.db.feedbackRequests.push(newReq);
-    this.persist();
+    this.persistLocal();
+
+    saveDocument(COLLECTIONS.feedbackRequests, newReq);
     return newReq;
   }
 
@@ -476,7 +555,9 @@ class LocalStore {
       req.reply = replyMessage.trim();
       req.status = 'RESOLVED';
       req.repliedAt = new Date().toISOString();
-      this.persist();
+      this.persistLocal();
+
+      saveDocument(COLLECTIONS.feedbackRequests, req);
       return req;
     }
     return undefined;
@@ -513,7 +594,9 @@ class LocalStore {
       createdAt: new Date().toISOString(),
     };
     this.db.employees.push(newEmp);
-    this.persist();
+    this.persistLocal();
+
+    saveDocument(COLLECTIONS.employees, newEmp);
     return newEmp;
   }
 
@@ -525,7 +608,8 @@ class LocalStore {
     if (updates.departmentId !== undefined) emp.departmentId = updates.departmentId;
     if (updates.isActive !== undefined) emp.isActive = updates.isActive;
 
-    this.persist();
+    this.persistLocal();
+    saveDocument(COLLECTIONS.employees, emp);
     return emp;
   }
 
@@ -572,6 +656,7 @@ class LocalStore {
     notes?: string;
   }): Evaluation {
     const { employeeId, kpiId, month, year, w1Pct, w2Pct, w3Pct, w4Pct, notes } = data;
+    let savedEval: Evaluation;
 
     let existing = this.db.evaluations.find(
       (ev) =>
@@ -588,8 +673,8 @@ class LocalStore {
       if (w4Pct !== undefined) existing.w4Pct = w4Pct;
       if (notes !== undefined) existing.notes = notes;
       existing.updatedAt = new Date().toISOString();
-      this.persist();
-      return existing;
+      this.persistLocal();
+      savedEval = existing;
     } else {
       const newEval: Evaluation = {
         id: `eval_${employeeId}_${kpiId}_${year}_${month}`,
@@ -605,9 +690,12 @@ class LocalStore {
         updatedAt: new Date().toISOString(),
       };
       this.db.evaluations.push(newEval);
-      this.persist();
-      return newEval;
+      this.persistLocal();
+      savedEval = newEval;
     }
+
+    saveDocument(COLLECTIONS.evaluations, savedEval);
+    return savedEval;
   }
 
   public saveBatchEvaluations(
@@ -627,6 +715,7 @@ class LocalStore {
     evaluations.forEach((item) => {
       results.push(this.saveEvaluation(item));
     });
+    batchSaveDocuments(COLLECTIONS.evaluations, results);
     return results;
   }
 }

@@ -5,7 +5,7 @@ export interface Department {
   name: string; // 'Development', 'Quality Assurance', 'Product Owners'
 }
 
-export type UserRole = 'ADMIN' | 'CTO' | 'PO' | 'OM' | 'HR' | 'ACCOUNTANT' | 'EVALUATOR' | 'EMPLOYEE';
+export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'CTO' | 'PO' | 'OM' | 'HR' | 'ACCOUNTANT' | 'EVALUATOR' | 'EMPLOYEE';
 
 export interface User {
   id: string;

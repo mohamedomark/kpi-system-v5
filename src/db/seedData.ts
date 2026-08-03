@@ -9,6 +9,15 @@ export const INITIAL_DEPARTMENTS: Department[] = [
 
 export const INITIAL_USERS: User[] = [
   {
+    id: 'usr_super',
+    username: 'super',
+    name: 'Super Admin',
+    email: 'super@company.com',
+    role: 'SUPER_ADMIN',
+    password: '123456',
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: 'usr_admin',
     username: 'admin',
     name: 'System Administrator',

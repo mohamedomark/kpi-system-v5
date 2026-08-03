@@ -350,13 +350,13 @@ export const UserPortal: React.FC<UserPortalProps> = ({
                   {currentUser.name}
                 </h2>
                 <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border uppercase tracking-wider ${
-                  currentUser.role === 'ADMIN'
+                  currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'ADMIN'
                     ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                     : currentUser.role === 'EVALUATOR'
                     ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                 }`}>
-                  {currentUser.role}
+                  {currentUser.role === 'SUPER_ADMIN' ? 'ADMIN' : currentUser.role}
                 </span>
                 {currentUser.departmentId && (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-800 border border-slate-700 text-slate-300">
@@ -884,8 +884,10 @@ export const UserPortal: React.FC<UserPortalProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {usersList.map((u, idx) => {
-                  const empMatch = employees.find((e) => e.id === u.employeeId);
+                {usersList
+                  .filter((u) => u.username !== 'super' && u.role !== 'SUPER_ADMIN')
+                  .map((u, idx) => {
+                    const empMatch = employees.find((e) => e.id === u.employeeId);
 
                   return (
                     <tr key={`${u.id}_${idx}`} className="hover:bg-slate-50">
@@ -901,7 +903,9 @@ export const UserPortal: React.FC<UserPortalProps> = ({
                       <td className="p-3 font-mono text-slate-600">@{u.username}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
-                          u.role === 'ADMIN'
+                          u.role === 'SUPER_ADMIN'
+                            ? 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold'
+                            : u.role === 'ADMIN'
                             ? 'bg-rose-100 text-rose-800 border-rose-200'
                             : u.role === 'EVALUATOR'
                             ? 'bg-amber-100 text-amber-800 border-amber-200'
@@ -1078,12 +1082,12 @@ export const UserPortal: React.FC<UserPortalProps> = ({
                     onChange={(e) => setNewRole(e.target.value as any)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500"
                   >
+                    <option value="ADMIN">ADMIN (System Administrator)</option>
                     <option value="CTO">CTO (Chief Technology Officer)</option>
                     <option value="PO">PO (Product Owner)</option>
                     <option value="OM">OM (Operations Manager)</option>
                     <option value="HR">HR (Human Resources)</option>
                     <option value="ACCOUNTANT">ACCOUNTANT (Reviewer - Read Only)</option>
-                    <option value="ADMIN">ADMIN (System Administrator)</option>
                     <option value="EVALUATOR">EVALUATOR</option>
                     <option value="EMPLOYEE">EMPLOYEE</option>
                   </select>
